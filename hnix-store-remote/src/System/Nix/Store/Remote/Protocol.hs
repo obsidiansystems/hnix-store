@@ -39,8 +39,8 @@ import           System.Nix.Store.Remote.Socket
 
 ourProtoVersion :: ProtoVersion
 ourProtoVersion = ProtoVersion
-  { protoVersion_major = 0x1
-  , protoVersion_minor = 0x15
+  { protoVersion_major = 1
+  , protoVersion_minor = 21
   }
 
 workerMagic1 :: Int32
