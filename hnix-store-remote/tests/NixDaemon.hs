@@ -201,7 +201,9 @@ spec_protocol = Hspec.around withNixDaemon $
       itRights "validates path" $ withPath $ \path -> do
         liftIO $ print path
         isValidPathUncached path `shouldReturn` True
-      itLefts "fails on invalid path" $ mapStoreDir (\_ -> StoreDir "/asdf") $ isValidPathUncached invalidPath
+      itLefts "fails on invalid path" $ mapConnectionInfo
+        (\sc -> sc { storeConfig_dir = StoreDir "/asdf" })
+        $ isValidPathUncached invalidPath
 
     context "queryAllValidPaths" $ do
       itRights "empty query" queryAllValidPaths

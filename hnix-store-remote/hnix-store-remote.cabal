@@ -36,7 +36,8 @@ library
     , System.Nix.Store.Remote.Parsers
     , System.Nix.Store.Remote.Protocol
     , System.Nix.Store.Remote.Types
-    , System.Nix.Store.Remote.Util
+    , System.Nix.Store.Remote.Socket
+    , System.Nix.Store.Remote.TextConv
 
   build-depends:
       base >=4.12 && <5
@@ -93,7 +94,7 @@ test-suite hnix-store-remote-tests
   other-modules:
       NixDaemon
     , Spec
-    , Util
+    , TextConv
   hs-source-dirs:    tests
   build-tool-depends:
     tasty-discover:tasty-discover

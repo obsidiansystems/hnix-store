@@ -2,11 +2,20 @@
 {-# language KindSignatures #-}
 {-# language ScopedTypeVariables #-}
 module System.Nix.Store.Remote.Types
-  ( MonadStore
+  ( HasStoreDir(..)
+  , ProtoVersion(..)
+  , HasProtoVersion(..)
+  , HasStoreSocket(..)
+  -- *
   , StoreConfig(..)
+  , PreStoreConfig(..)
+  , MonadStore0
+  , MonadStore
+  , MonadStoreHandshake
+  -- *
   , Logger(..)
   , Field(..)
-  , mapStoreDir
+  , mapConnectionInfo
   , getStoreDir
   , getLog
   , flushLog
@@ -24,20 +33,58 @@ import           Network.Socket                 ( Socket )
 
 import           System.Nix.StorePath          ( StoreDir )
 
-data StoreConfig = StoreConfig
-  { storeDir    :: StoreDir
-  , storeSocket :: Socket
+class HasStoreDir r where
+  storeDir :: r -> StoreDir
+
+data ProtoVersion = ProtoVersion
+  { protoVersion_major :: Word16
+  , protoVersion_minor :: Word8
+  }
+  deriving (Eq, Ord, Show)
+
+class HasProtoVersion r where
+  protoVersion :: r -> ProtoVersion
+
+class HasStoreSocket r where
+  storeSocket :: r -> Socket
+
+data PreStoreConfig = PreStoreConfig
+  { preStoreConfig_dir    :: StoreDir
+  , preStoreConfig_socket :: Socket
   }
 
-type MonadStore a
+instance HasStoreDir PreStoreConfig where
+  storeDir = preStoreConfig_dir
+
+instance HasStoreSocket PreStoreConfig where
+  storeSocket = preStoreConfig_socket
+
+data StoreConfig = StoreConfig
+  { storeConfig_dir         :: StoreDir
+  , storeConfig_protoVersion :: ProtoVersion
+  , storeConfig_socket      :: Socket
+  }
+
+instance HasStoreDir StoreConfig where
+  storeDir = storeConfig_dir
+
+instance HasProtoVersion StoreConfig where
+  protoVersion = storeConfig_protoVersion
+
+instance HasStoreSocket StoreConfig where
+  storeSocket = storeConfig_socket
+
+type MonadStore0 r
   = ExceptT
       String
-      (StateT (Maybe BSL.ByteString, [Logger]) (ReaderT StoreConfig IO))
-      a
+      (StateT (Maybe BSL.ByteString, [Logger]) (ReaderT r IO))
 
--- | For lying about the store dir in tests
-mapStoreDir :: (StoreDir -> StoreDir) -> (MonadStore a -> MonadStore a)
-mapStoreDir f = mapExceptT . mapStateT . withReaderT $ \c@StoreConfig { storeDir = sd } -> c { storeDir = f sd }
+type MonadStoreHandshake = MonadStore0 PreStoreConfig
+
+type MonadStore = MonadStore0 StoreConfig
+
+mapConnectionInfo :: (rb -> ra) -> (MonadStore0 ra c -> MonadStore0 rb c)
+mapConnectionInfo = mapExceptT .  mapStateT . withReaderT
 
 type ActivityID = Int
 type ActivityParentID = Int
@@ -59,27 +106,30 @@ data Logger =
   | Result        ActivityID ResultType [Field]
   deriving (Eq, Ord, Show)
 
-isError :: Logger -> Bool
-isError (Error _ _) = True
-isError _           = False
+viewError :: Logger -> Maybe (Int, ByteString)
+viewError (Error x y) = Just (x, y)
+viewError _           = Nothing
 
-gotError :: MonadStore Bool
+isError :: Logger -> Bool
+isError = isJust . viewError
+
+gotError :: MonadStore0 r Bool
 gotError = gets (any isError . snd)
 
-getError :: MonadStore [Logger]
-getError = gets (filter isError . snd)
+getError :: MonadStore0 r [(Int, ByteString)]
+getError = gets (mapMaybe viewError . snd)
 
-getLog :: MonadStore [Logger]
+getLog :: MonadStore0 r [Logger]
 getLog = gets snd
 
-flushLog :: MonadStore ()
+flushLog :: MonadStore0 r ()
 flushLog = modify (\(a, _b) -> (a, []))
 
-setData :: BSL.ByteString -> MonadStore ()
+setData :: BSL.ByteString -> MonadStore0 r ()
 setData x = modify (\(_, b) -> (Just x, b))
 
-clearData :: MonadStore ()
+clearData :: MonadStore0 r ()
 clearData = modify (\(_, b) -> (Nothing, b))
 
-getStoreDir :: MonadStore StoreDir
+getStoreDir :: (HasStoreDir r, MonadReader r m) => m StoreDir
 getStoreDir = asks storeDir

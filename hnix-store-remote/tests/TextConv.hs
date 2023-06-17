@@ -1,8 +1,7 @@
-
-module Util where
+module TextConv where
 
 import           Data.Text.Arbitrary ()
-import           System.Nix.Store.Remote.Util
+import           System.Nix.Store.Remote.TextConv
 import           Test.Tasty.QuickCheck
 
 prop_TextToBSLRoundtrip :: Text -> Property

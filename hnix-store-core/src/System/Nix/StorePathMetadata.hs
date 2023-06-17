@@ -13,9 +13,7 @@ import           System.Nix.Signature           ( NarSignature )
 
 -- | Metadata about a 'StorePath'
 data StorePathMetadata = StorePathMetadata
-  { -- | The path this metadata is about
-    path :: !StorePath
-  , -- | The path to the derivation file that built this path, if any
+  { -- | The path to the derivation file that built this path, if any
     -- and known.
     deriverPath :: !(Maybe StorePath)
   , -- TODO should this be optional?
