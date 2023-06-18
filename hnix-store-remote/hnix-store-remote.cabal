@@ -52,6 +52,7 @@ library
     , monad-control
     , concurrency
     , cryptonite
+    , directory
     , exceptions
     , text
     , time

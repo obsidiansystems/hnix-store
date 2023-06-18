@@ -18,14 +18,14 @@ where
 
 import           Prelude                 hiding ( IORef, bool, put, get )
 
-import           Control.Exception.Lifted       ( bracket )
-import           Control.Monad.Trans.Control    hiding ( Run )
+import           Control.Monad.Catch            ( bracket )
+import           Control.Monad.Trans.Control    ( MonadBaseControl )
 import           Control.Monad.Conc.Class
 
 import           Network.Socket                 ( SockAddr(SockAddrUnix) )
 import qualified Network.Socket                 as S
 
-import           System.Directory
+import           System.Directory               ( removeFile )
 
 import           System.Nix.StorePath           ( StoreDir (..) )
 

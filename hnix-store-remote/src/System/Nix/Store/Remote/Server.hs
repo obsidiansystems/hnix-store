@@ -183,7 +183,6 @@ startWork x = updateLogger x $ \(TunnelLoggerState _ p) -> (,)
   (TunnelLoggerState True []) $
   (traverse_ sockPut $ reverse p)
 
-
 stopWork
   :: (MonadIO m, MonadReader r m, HasStoreSocket r)
   => TunnelLogger r
