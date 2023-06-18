@@ -179,7 +179,7 @@ builderSh = "declare -xpexport > $out"
 spec_protocol :: Spec
 spec_protocol = makeSpecProtocol withNixDaemon
 
-makeSpecProtocol :: (((MonadStore () -> Run ()) -> IO ()) -> IO ()) -> Spec
+makeSpecProtocol :: (Hspec.ActionWith (MonadStore () -> Run ()) -> IO ()) -> Spec
 makeSpecProtocol f = Hspec.around f $
 
   describe "store" $ do
