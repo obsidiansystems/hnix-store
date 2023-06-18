@@ -32,6 +32,7 @@ library
       System.Nix.Store.Remote
     , System.Nix.Store.Remote.Binary
     , System.Nix.Store.Remote.Builders
+    , System.Nix.Store.Remote.GADT
     , System.Nix.Store.Remote.Logger
     , System.Nix.Store.Remote.Parsers
     , System.Nix.Store.Remote.Protocol

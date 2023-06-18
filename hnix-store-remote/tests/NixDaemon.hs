@@ -26,7 +26,8 @@ import           System.FilePath
 import           System.Nix.Build
 import           System.Nix.StorePath
 import           System.Nix.Store.Remote
-import           System.Nix.Store.Remote.Protocol
+import           System.Nix.Store.Remote.GADT
+import           System.Nix.Store.Remote.Protocol hiding (WorkerOp(..))
 
 import           Crypto.Hash                    ( SHA256 )
 import           System.Nix.Nar                 ( dumpPath )
@@ -153,14 +154,14 @@ itLefts name action = it name action isLeft
 
 withPath :: (StorePath -> MonadStore a) -> MonadStore a
 withPath action = do
-  path <- addTextToStore "hnix-store" "test" (HS.fromList []) False
+  path <- doReq $ AddTextToStore "hnix-store" "test" (HS.fromList []) False
   action path
 
 -- | dummy path, adds <tmp>/dummpy with "Hello World" contents
 dummy :: MonadStore StorePath
 dummy = do
   let Right n = makeStorePathName "dummy"
-  addToStore @SHA256 n (dumpPath "dummy") False False
+  doReq $ AddToStore @SHA256 Proxy n (dumpPath "dummy") False False
 
 invalidPath :: StorePath
 invalidPath =
@@ -169,7 +170,7 @@ invalidPath =
 
 withBuilder :: (StorePath -> MonadStore a) -> MonadStore a
 withBuilder action = do
-  path <- addTextToStore "builder" builderSh (HS.fromList []) False
+  path <- doReq $ AddTextToStore "builder" builderSh (HS.fromList []) False
   action path
 
 builderSh :: Text
@@ -181,18 +182,18 @@ spec_protocol = Hspec.around withNixDaemon $
   describe "store" $ do
 
     context "syncWithGC" $
-      itRights "syncs with garbage collector" syncWithGC
+      itRights "syncs with garbage collector" $ doReq SyncWithGC
 
     context "verifyStore" $ do
       itRights "check=False repair=False" $
-        verifyStore False False `shouldReturn` False
+        doReq (VerifyStore False False) `shouldReturn` False
 
       itRights "check=True repair=False" $
-        verifyStore True False `shouldReturn` False
+        doReq (VerifyStore True False) `shouldReturn` False
 
       --privileged
       itRights "check=True repair=True" $
-        verifyStore True True `shouldReturn` False
+        doReq (VerifyStore True True) `shouldReturn` False
 
     context "addTextToStore" $
       itRights "adds text to store" $ withPath pure
@@ -200,60 +201,60 @@ spec_protocol = Hspec.around withNixDaemon $
     context "isValidPathUncached" $ do
       itRights "validates path" $ withPath $ \path -> do
         liftIO $ print path
-        isValidPathUncached path `shouldReturn` True
+        doReq (IsValidPathUncached path) `shouldReturn` True
       itLefts "fails on invalid path" $ mapConnectionInfo
         (\sc -> sc { storeConfig_dir = StoreDir "/asdf" })
-        $ isValidPathUncached invalidPath
+        $ doReq $ IsValidPathUncached invalidPath
 
     context "queryAllValidPaths" $ do
-      itRights "empty query" queryAllValidPaths
+      itRights "empty query" $ doReq QueryAllValidPaths
       itRights "non-empty query" $ withPath $ \path ->
-        queryAllValidPaths `shouldReturn` HS.fromList [path]
+        doReq QueryAllValidPaths `shouldReturn` HS.fromList [path]
 
     context "queryPathInfoUncached" $
-      itRights "queries path info" $ withPath queryPathInfoUncached
+      itRights "queries path info" $ withPath $ doReq . QueryPathInfoUncached
 
     context "ensurePath" $
-      itRights "simple ensure" $ withPath ensurePath
+      itRights "simple ensure" $ withPath $ doReq . EnsurePath
 
     context "addTempRoot" $
-      itRights "simple addition" $ withPath addTempRoot
+      itRights "simple addition" $ withPath $ doReq . AddTempRoot
 
     context "addIndirectRoot" $
-      itRights "simple addition" $ withPath addIndirectRoot
+      itRights "simple addition" $ withPath $ doReq . AddIndirectRoot
 
     context "buildPaths" $ do
       itRights "build Normal" $ withPath $ \path -> do
         let pathSet = HS.fromList [path]
-        buildPaths pathSet Normal
+        doReq $ BuildPaths pathSet Normal
 
       itRights "build Check" $ withPath $ \path -> do
         let pathSet = HS.fromList [path]
-        buildPaths pathSet Check
+        doReq $ BuildPaths pathSet Check
 
       itLefts "build Repair" $ withPath $ \path -> do
         let pathSet = HS.fromList [path]
-        buildPaths pathSet Repair
+        doReq $ BuildPaths pathSet Repair
 
     context "roots" $ context "findRoots" $ do
-        itRights "empty roots" (findRoots `shouldReturn` M.empty)
+        itRights "empty roots" $ doReq FindRoots `shouldReturn` M.empty
 
         itRights "path added as a temp root" $ withPath $ \_ -> do
-          roots <- findRoots
+          roots <- doReq FindRoots
           roots `shouldSatisfy` ((== 1) . M.size)
 
-    context "optimiseStore" $ itRights "optimises" optimiseStore
+    context "optimiseStore" $ itRights "optimises" $ doReq OptimiseStore
 
     context "queryMissing" $
       itRights "queries" $ withPath $ \path -> do
         let pathSet = HS.fromList [path]
-        queryMissing pathSet `shouldReturn` (HS.empty, HS.empty, HS.empty, 0, 0)
+        doReq (QueryMissing pathSet) `shouldReturn` (HS.empty, HS.empty, HS.empty, 0, 0)
 
     context "addToStore" $
       itRights "adds file to store" $ do
         fp <- liftIO $ writeSystemTempFile "addition" "lal"
         let Right n = makeStorePathName "tmp-addition"
-        res <- addToStore @SHA256 n (dumpPath fp) False False
+        res <- doReq $ AddToStore @SHA256 Proxy n (dumpPath fp) False False
         liftIO $ print res
 
     context "with dummy" $ do
@@ -262,4 +263,4 @@ spec_protocol = Hspec.around withNixDaemon $
       itRights "valid dummy" $ do
         path <- dummy
         liftIO $ print path
-        isValidPathUncached path `shouldReturn` True
+        doReq (IsValidPathUncached path) `shouldReturn` True
