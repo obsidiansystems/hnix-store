@@ -28,6 +28,7 @@ module System.Nix.Store.Remote.Binary
   -- *
   , protoVersion
   , field
+  , errorInfo
   -- *
   , path
   , derivationOutput
@@ -206,6 +207,9 @@ field = Serializer
         put int (1 :: Int8)
         put byteStringLen s
   }
+
+errorInfo :: Serializer r ErrorInfo
+errorInfo = undefined
 
 path :: HasStoreDir r => Serializer r StorePath
 path = Serializer

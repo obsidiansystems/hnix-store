@@ -8,37 +8,50 @@ import qualified Data.Binary.Get               as B
 import qualified Data.Binary.Put               as B
 import qualified Data.ByteString.Char8         as BSC
 
+import           Network.Socket                 ( Socket )
 import           Network.Socket.ByteString      ( recv
                                                 , sendAll
                                                 )
 
 import qualified System.Nix.Store.Remote.Binary as RB
-import           System.Nix.Store.Remote.MonadStore
 
-genericIncremental :: (MonadIO m) => m (Maybe ByteString) -> B.Get a -> m a
+newtype DecodingError = DecodingError String
+  deriving (Eq, Ord, Show)
+
+class HasStoreSocket r where
+  storeSocket :: r -> Socket
+
+instance HasStoreSocket Socket where
+  storeSocket = id
+
+genericIncremental :: (MonadIO m) => m (Maybe ByteString) -> B.Get a -> m (Either String a)
 genericIncremental getsome parser = go decoder
  where
   decoder = B.runGetIncremental parser
-  go (B.Done _leftover _consumed x  ) = pure x
+  go (B.Done _leftover _consumed x  ) = pure $ Right x
   go (B.Partial k                   ) = do
     chunk <- getsome
     go (k chunk)
-  go (B.Fail _leftover _consumed msg) = error $ fromString msg
+  go (B.Fail _leftover _consumed msg) = pure $ Left msg
 
-getSocketIncremental :: forall r a. HasStoreSocket r => RB.Get r a -> MonadStore0 r a
-getSocketIncremental g = do
+sockTryGet
+  :: forall r m a
+  .  (MonadReader r m, MonadIO m, HasStoreSocket r)
+  => RB.Get r a
+  -> m (Either String a)
+sockTryGet g = do
   r <- ask
   genericIncremental sockGet8 $ runReaderT g r
  where
-  sockGet8 :: MonadStore0 r (Maybe BSC.ByteString)
+  sockGet8 :: m (Maybe BSC.ByteString)
   sockGet8 = do
     soc <- asks storeSocket
     liftIO $ Just <$> recv soc 8
 
-sockPut :: HasStoreSocket r => RB.Put r -> MonadStore0 r ()
+sockGet :: (MonadReader r m, MonadIO m, HasStoreSocket r) => RB.Get r a -> m a
+sockGet = (either (liftIO . fail) pure) <=< sockTryGet
+
+sockPut :: (MonadReader r m, MonadIO m, HasStoreSocket r) => RB.Put r -> m ()
 sockPut p = do
   r <- ask
   liftIO $ sendAll (storeSocket r) $ toStrict $ B.runPut $ runReaderT p r
-
-sockGet :: HasStoreSocket r => RB.Get r a -> MonadStore0 r a
-sockGet = getSocketIncremental

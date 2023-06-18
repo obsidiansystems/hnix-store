@@ -43,17 +43,6 @@ import qualified System.Nix.Store.Remote.Protocol as P
 import           System.Nix.Store.Remote.Protocol hiding ( protoVersion )
 
 
-ourProtoVersion :: ProtoVersion
-ourProtoVersion = ProtoVersion
-  { protoVersion_major = 1
-  , protoVersion_minor = 21
-  }
-
-workerMagic1 :: Int32
-workerMagic1 = 0x6e697863
-workerMagic2 :: Int32
-workerMagic2 = 0x6478696f
-
 simpleOp :: WorkerOp -> MonadStore Bool
 simpleOp op = simpleOpArgs op pass
 
@@ -132,14 +121,14 @@ doReq = \case
       -- more data. Needs investigation.
       -- Intentionally the only warning that should pop-up.
       put int (0 :: Integer)
-    getSocketIncremental $ get buildResult
+    sockGet $ get buildResult
 
   R.EnsurePath pn -> do
     void $ simpleOpArgs P.EnsurePath $ put path pn
 
   R.FindRoots -> do
     runOp P.FindRoots
-    r <- getSocketIncremental $ get $ list $ tup lazyByteStringLen path
+    r <- sockGet $ get $ list $ tup lazyByteStringLen path
     pure $ Data.Map.Strict.fromList r
   {-
    where
@@ -173,7 +162,7 @@ doReq = \case
       put path key
     valid <- sockGet $ get bool
     unless valid $ error "Path is not valid"
-    meta <- getSocketIncremental $ get pathMetadata
+    meta <- sockGet $ get pathMetadata
     pure $ (key, meta)
 
   R.QueryReferrers p -> do

@@ -1,14 +1,20 @@
 {-# language DataKinds #-}
 {-# language KindSignatures #-}
 {-# language ScopedTypeVariables #-}
-module System.Nix.Store.Remote.Protocol
-  ( ProtoVersion(..)
-  , HasProtoVersion(..)
-  , Logger(..)
-  , Field(..)
-  , WorkerOp(..)
-  )
-where
+{-# LANGUAGE PatternSynonyms #-}
+module System.Nix.Store.Remote.Protocol where
+
+workerMagic1 :: Int32
+workerMagic1 = 0x6e697863
+
+workerMagic2 :: Int32
+workerMagic2 = 0x6478696f
+
+ourProtoVersion :: ProtoVersion
+ourProtoVersion = ProtoVersion
+  { protoVersion_major = 1
+  , protoVersion_minor = 21
+  }
 
 data ProtoVersion = ProtoVersion
   { protoVersion_major :: Word16
@@ -19,25 +25,59 @@ data ProtoVersion = ProtoVersion
 class HasProtoVersion r where
   protoVersion :: r -> ProtoVersion
 
-type ActivityID = Int
-type ActivityParentID = Int
-type ActivityType = Int
-type Verbosity = Int
-type ResultType = Int
+type ActivityID = Word64
+type ActivityParentID = Word64
+type ActivityType = Word64
+type Verbosity = Word64
+type ResultType = Word64
+
+pattern StderrNext :: Word32
+pattern StderrNext = 0x6f6c6d67
+
+pattern StderrRead :: Word32
+pattern StderrRead = 0x32617461 -- data needed from source
+
+pattern StderrWrite :: Word32
+pattern StderrWrite = 0x32617416 -- data for sink
+
+pattern StderrLast :: Word32
+pattern StderrLast = 0x616c7473
+
+pattern StderrError :: Word32
+pattern StderrError = 0x63787470
+
+pattern StderrStartActivity :: Word32
+pattern StderrStartActivity = 0x53545254
+
+pattern StderrStopActivity :: Word32
+pattern StderrStopActivity = 0x53544f50
+
+pattern StderrResult :: Word32
+pattern StderrResult = 0x52534c54
 
 data Field = LogStr ByteString | LogInt Int
   deriving (Eq, Ord, Show)
 
 data Logger =
     Next          ByteString
-  | Read          Int            -- data needed from source
+  | Read          Word        -- data needed from source
   | Write         ByteString -- data for sink
   | Last
-  | Error         Int ByteString
+  | Error         Word ByteString
   | StartActivity ActivityID Verbosity ActivityType ByteString [Field] ActivityParentID
   | StopActivity  ActivityID
   | Result        ActivityID ResultType [Field]
   deriving (Eq, Ord, Show)
+
+type Trace = Text -- should also contain an errorpos, but nix always writes a 0 anyway
+
+data ErrorInfo = ErrorInfo
+  { _errorInfo_level :: Verbosity
+  , _errorInfo_name :: Text
+  , _errorInfo_msg :: Text
+  -- _errorInfo_errPos :: Maybe ErrPos .. nix always writes 0 for this.
+  , _errorInfo_traces :: [Trace]
+  } deriving Show
 
 -- | worker opcode
 --

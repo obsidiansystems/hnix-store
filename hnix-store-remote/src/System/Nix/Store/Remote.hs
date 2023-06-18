@@ -25,7 +25,10 @@ import qualified Network.Socket                 as S
 import           System.Nix.StorePath           ( StoreDir (..) )
 
 import           System.Nix.Store.Remote.MonadStore
+import           System.Nix.Store.Remote.Socket
+
 import           System.Nix.Store.Remote.Client
+import           System.Nix.Store.Remote.Server
 
 defaultSockPath :: String
 defaultSockPath = "/nix/var/nix/daemon-socket/socket"
