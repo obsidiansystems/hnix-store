@@ -31,7 +31,7 @@ import           System.Nix.StorePath           ( StorePath
                                                 )
 import           System.Nix.StorePathMetadata  ( StorePathMetadata )
 
-import           System.Nix.Store.Remote.Types
+import           System.Nix.Store.Remote.MonadStore
 import           System.Nix.Nar                 ( NarSource )
 
 type RepairFlag = Bool

@@ -13,7 +13,7 @@ import           Network.Socket.ByteString      ( recv
                                                 )
 
 import qualified System.Nix.Store.Remote.Binary as RB
-import           System.Nix.Store.Remote.Types
+import           System.Nix.Store.Remote.MonadStore
 
 genericIncremental :: (MonadIO m) => m (Maybe ByteString) -> B.Get a -> m a
 genericIncremental getsome parser = go decoder

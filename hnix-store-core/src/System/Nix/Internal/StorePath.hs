@@ -11,6 +11,8 @@ Description : Representation of Nix store paths.
 module System.Nix.Internal.StorePath
   ( -- * Basic store path types
     StoreDir(..)
+  , HasStoreDir(..)
+  , getStoreDir
   , StorePath(..)
   , StorePathName(..)
   , StorePathSet
@@ -163,6 +165,12 @@ type RawFilePath = ByteString
 newtype StoreDir = StoreDir {
     unStoreDir :: RawFilePath
   } deriving (Eq, Hashable, Ord, Show)
+
+class HasStoreDir r where
+  storeDir :: r -> StoreDir
+
+getStoreDir :: (HasStoreDir r, MonadReader r m) => m StoreDir
+getStoreDir = asks storeDir
 
 -- | Render a 'StorePath' as a 'RawFilePath'.
 storePathToRawFilePath :: StoreDir -> StorePath -> RawFilePath

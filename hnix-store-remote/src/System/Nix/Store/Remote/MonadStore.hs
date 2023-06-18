@@ -1,11 +1,8 @@
 {-# language DataKinds #-}
 {-# language KindSignatures #-}
 {-# language ScopedTypeVariables #-}
-module System.Nix.Store.Remote.Types
-  ( HasStoreDir(..)
-  , ProtoVersion(..)
-  , HasProtoVersion(..)
-  , HasStoreSocket(..)
+module System.Nix.Store.Remote.MonadStore
+  ( HasStoreSocket(..)
   -- *
   , StoreConfig(..)
   , PreStoreConfig(..)
@@ -13,8 +10,6 @@ module System.Nix.Store.Remote.Types
   , MonadStore
   , MonadStoreHandshake
   -- *
-  , Logger(..)
-  , Field(..)
   , mapConnectionInfo
   , getStoreDir
   , getLog
@@ -31,19 +26,11 @@ import           Control.Monad.Trans.Except (mapExceptT)
 import qualified Data.ByteString.Lazy          as BSL
 import           Network.Socket                 ( Socket )
 
-import           System.Nix.StorePath          ( StoreDir )
-
-class HasStoreDir r where
-  storeDir :: r -> StoreDir
-
-data ProtoVersion = ProtoVersion
-  { protoVersion_major :: Word16
-  , protoVersion_minor :: Word8
-  }
-  deriving (Eq, Ord, Show)
-
-class HasProtoVersion r where
-  protoVersion :: r -> ProtoVersion
+import           System.Nix.Store.Remote.Protocol
+import           System.Nix.StorePath          ( StoreDir
+                                               , HasStoreDir(..)
+                                               , getStoreDir
+                                               )
 
 class HasStoreSocket r where
   storeSocket :: r -> Socket
@@ -86,26 +73,6 @@ type MonadStore = MonadStore0 StoreConfig
 mapConnectionInfo :: (rb -> ra) -> (MonadStore0 ra c -> MonadStore0 rb c)
 mapConnectionInfo = mapExceptT .  mapStateT . withReaderT
 
-type ActivityID = Int
-type ActivityParentID = Int
-type ActivityType = Int
-type Verbosity = Int
-type ResultType = Int
-
-data Field = LogStr ByteString | LogInt Int
-  deriving (Eq, Ord, Show)
-
-data Logger =
-    Next          ByteString
-  | Read          Int            -- data needed from source
-  | Write         ByteString -- data for sink
-  | Last
-  | Error         Int ByteString
-  | StartActivity ActivityID Verbosity ActivityType ByteString [Field] ActivityParentID
-  | StopActivity  ActivityID
-  | Result        ActivityID ResultType [Field]
-  deriving (Eq, Ord, Show)
-
 viewError :: Logger -> Maybe (Int, ByteString)
 viewError (Error x y) = Just (x, y)
 viewError _           = Nothing
@@ -130,6 +97,3 @@ setData x = modify (\(_, b) -> (Just x, b))
 
 clearData :: MonadStore0 r ()
 clearData = modify (\(_, b) -> (Nothing, b))
-
-getStoreDir :: (HasStoreDir r, MonadReader r m) => m StoreDir
-getStoreDir = asks storeDir

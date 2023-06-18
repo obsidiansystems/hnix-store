@@ -4,6 +4,8 @@ Description : Representation of Nix store paths.
 module System.Nix.StorePath
   ( -- * Basic store path types
     StoreDir(..)
+  , HasStoreDir(..)
+  , getStoreDir
   , StorePath(..)
   , StorePathName(..)
   , StorePathSet

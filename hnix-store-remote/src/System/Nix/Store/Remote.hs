@@ -9,7 +9,7 @@
 
 module System.Nix.Store.Remote
   ( doReq
-  , module System.Nix.Store.Remote.Types
+  , module System.Nix.Store.Remote.MonadStore
   )
 where
 
@@ -29,8 +29,8 @@ import qualified Data.Map.Strict
 import qualified System.Nix.StorePath
 
 import           System.Nix.Store.Remote.Binary
-import           System.Nix.Store.Remote.Types
-import           System.Nix.Store.Remote.Protocol hiding (WorkerOp(..))
+import           System.Nix.Store.Remote.MonadStore
+import           System.Nix.Store.Remote.Client
 import qualified System.Nix.Store.Remote.Protocol as P
 import           System.Nix.Store.Remote.Socket
 import           System.Nix.Store.Remote.GADT as R

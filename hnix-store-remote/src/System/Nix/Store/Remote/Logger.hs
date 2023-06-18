@@ -19,7 +19,8 @@ import qualified Data.ByteString.Char8         as BSC
 import           Network.Socket.ByteString      ( recv )
 
 import           System.Nix.Store.Remote.Binary
-import           System.Nix.Store.Remote.Types
+import           System.Nix.Store.Remote.Protocol
+import           System.Nix.Store.Remote.MonadStore
 import           System.Nix.Store.Remote.Socket
 
 

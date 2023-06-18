@@ -55,7 +55,7 @@ import           System.Nix.Hash                ( SomeNamedDigest(..)
 import           System.Nix.StorePathMetadata
 import qualified System.Nix.Store.Remote.Parsers
 import           System.Nix.Store.Remote.TextConv
-import           System.Nix.Store.Remote.Types hiding ( protoVersion )
+import           System.Nix.Store.Remote.Protocol hiding ( protoVersion )
 import           Crypto.Hash                    ( SHA256 )
 
 import           Data.Bits

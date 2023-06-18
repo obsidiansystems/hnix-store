@@ -32,4 +32,4 @@ exec ghci \
      "${pkgs[@]}" \
      "${extensions[@]}" \
      -i${PWD}/hnix-store-{core,remote}/{src,tests} \
-     hnix-store-remote/tests/Driver.hs
+     "$@"

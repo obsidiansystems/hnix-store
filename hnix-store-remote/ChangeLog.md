@@ -31,7 +31,7 @@ Nothing (it is tandem `hnix-store-core` fix release)
 
 ## [0.4.1.0](https://github.com/haskell-nix/hnix-store/compare/0.4.0.0...0.4.1.0) 2021-01-16
 
-* `System.Nix.Store.Remote`: module API now re-exports `System.Nix.Store.Remote.Types` API
+* `System.Nix.Store.Remote`: module API now re-exports `System.Nix.Store.Remote.MonadStore` API
 * Big clean-up of dependencies.
 
 ## [0.4.0.0](https://github.com/haskell-nix/hnix-store/compare/0.3.0.0...0.4.0.0) 2020-12-30
