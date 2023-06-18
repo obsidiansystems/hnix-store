@@ -10,17 +10,22 @@ module System.Nix.Store.Remote
   ( runStore
   , runStoreOpts
   , runStoreOptsTCP
-  , runStoreOpts'
+  , runDaemon
+  , runDaemonOpts
   , module System.Nix.Store.Remote.MonadStore
   )
 where
 
-import           Prelude                 hiding ( bool, put, get )
+import           Prelude                 hiding ( IORef, bool, put, get )
 
-import           Control.Exception              ( bracket )
+import           Control.Exception.Lifted       ( bracket )
+import           Control.Monad.Trans.Control    hiding ( Run )
+import           Control.Monad.Conc.Class
 
 import           Network.Socket                 ( SockAddr(SockAddrUnix) )
 import qualified Network.Socket                 as S
+
+import           System.Directory
 
 import           System.Nix.StorePath           ( StoreDir (..) )
 
@@ -60,3 +65,45 @@ runStoreOpts' sockFamily sockAddr storeRootDir code =
         { preStoreConfig_socket = soc
         , preStoreConfig_dir = storeRootDir
         }
+
+runDaemon
+  :: forall m a
+  . ( MonadIO m
+    , MonadBaseControl IO m
+    , MonadConc m
+    )
+  => WorkerHelper m
+  -> m a
+  -> m a
+runDaemon workerHelper k = runDaemonOpts (StoreDir "/nix/store") workerHelper defaultSockPath k
+
+-- | run an emulated nix daemon on given socket address.  the deamon will close
+-- when the continuation returns.
+runDaemonOpts
+  :: forall m a
+  . ( MonadIO m
+    , MonadBaseControl IO m
+    , MonadConc m
+    )
+  => StoreDir
+  -> WorkerHelper m
+  -> FilePath
+  -> m a
+  -> m a
+runDaemonOpts sd workerHelper f k = bracket
+  (liftIO $ S.socket S.AF_UNIX S.Stream S.defaultProtocol)
+  (\lsock -> liftIO $ S.close lsock *> removeFile f)
+  $ \lsock -> do
+  --                                                                                                           ^^^^^^^^^^^^
+  -- TODO:  this: ---------------------------------------------------------------------------------------------////////////
+  -- should really be
+  -- a file lock followed by unlink *before* bind rather than after close.  If
+  -- the program crashes (or loses power or something) then a stale unix
+  -- socket will stick around and prevent the daemon from starting.  using a
+  -- lock file instead means only one "copy" of the daemon can hold the lock,
+  -- and can safely unlink the socket before binding no matter how shutdown
+  -- occured.
+
+  -- set up the listening socket
+  liftIO $ S.bind lsock (SockAddrUnix f)
+  runDaemonSocket sd workerHelper lsock k

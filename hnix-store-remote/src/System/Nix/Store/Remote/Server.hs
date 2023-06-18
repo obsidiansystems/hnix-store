@@ -6,25 +6,54 @@
 {-# LANGUAGE LambdaCase #-}
 module System.Nix.Store.Remote.Server where
 
-import           Prelude                       hiding ( bool, put, get )
+import           Prelude                       hiding ( IORef, newIORef, atomicModifyIORef, bool, put, get )
 
+import           Control.Concurrent.Classy.Async
+import           Control.Monad.Conc.Class
 import           Control.Monad.Catch
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T (putStrLn)
 import           Network.Socket
-import qualified Network.Socket.ByteString.Lazy as LBSS
 
 import           System.Nix.StorePath ( StoreDir
                                       , StorePath
                                       )
 
 import           System.Nix.Store.Remote.Binary
-import           System.Nix.Store.Remote.Logger
 import           System.Nix.Store.Remote.Socket
 import           System.Nix.Store.Remote.GADT as R
 import qualified System.Nix.Store.Remote.Protocol as P
 import           System.Nix.Store.Remote.Protocol hiding ( protoVersion )
+
+
+type WorkerHelper m = forall a. StoreRequest a -> m a
+
+-- | run an emulated nix daemon on given socket address.  the deamon will close
+-- when the continuation returns.
+runDaemonSocket
+  :: forall m a
+  . (MonadIO m, MonadConc m)
+  => StoreDir
+  -> WorkerHelper m
+  -> Socket
+  -> m a
+  -> m a
+runDaemonSocket sd workerHelper lsock k = do
+  liftIO $ listen lsock maxListenQueue
+
+  liftIO $ T.putStrLn "listening"
+
+  let listener :: m Void
+      listener = do
+        (sock, _) <- liftIO $ accept lsock
+        liftIO $ T.putStrLn "accepting"
+
+        -- TODO: this, but without the space leak
+        fmap fst $ concurrently listener $ processConnection sd workerHelper sock
+
+  either absurd id <$> race listener k
+
 
 -- | fatal error in worker interaction which should disconnect client.
 data WorkerException
@@ -57,7 +86,7 @@ processConnection
   -> Socket
   -> m ()
 processConnection sd workerHelper sock = do
-  clientVersion <- flip runReaderT sock $ do
+  ~() <- flip runReaderT sock $ do
     -- Exchange the greeting.
     magic <- sockGet $ get int
     liftIO $ print ("magic" :: Text, magic)
@@ -77,10 +106,12 @@ processConnection sd workerHelper sock = do
       x :: Word32 <- sockGet $ get int
       when (x /= 0) $ do
         -- Obsolete CPU affinity.
-        void $ sockGet $ get int
+        _ :: Word32 <- sockGet $ get int
+        pure ()
 
     when (clientMinorVersion >= 11) $ do
-        void $ sockGet $ get int -- obsolete reserveSpace
+        _ :: Word32 <- sockGet $ get int -- obsolete reserveSpace
+        pure ()
 
     when (clientMinorVersion >= 33) $ do
         sockPut $ put text "nixVersion (smithy)"
@@ -97,7 +128,7 @@ processConnection sd workerHelper sock = do
     -- Process client requests.
     let loop = do
           op <- sockGet (get enum)
-          lift $ performOp sd workerHelper sock tunnelLogger op
+          lift $ performOp sd workerHelper sock clientVersion tunnelLogger op
           loop
     loop
 
@@ -106,17 +137,18 @@ processConnection sd workerHelper sock = do
 
 performOp
   :: StoreDir
-  -> (StoreRequest a -> m a)
+  -> WorkerHelper m
   -> Socket
+  -> ProtoVersion
   -> TunnelLogger r
   -> WorkerOp
-  -> m a
-performOp _sd _workerHelper _sock _tunnelLogger op = error $ "GOT TO " <> show op
+  -> m ()
+performOp _sd _workerHelper _sock _protoVersion _tunnelLogger op = error $ "GOT TO " <> show op
 
 ---
 
 data TunnelLogger r = TunnelLogger
-  { _tunnelLogger_state :: IORef (TunnelLoggerState r)
+  { _tunnelLogger_state :: IORef IO (TunnelLoggerState r)
   }
 
 data TunnelLoggerState r = TunnelLoggerState
@@ -132,10 +164,9 @@ enqueueMsg
   => TunnelLogger r
   -> Put r
   -> m ()
-enqueueMsg x s = join $ liftIO $ atomicModifyIORef' (_tunnelLogger_state x) $
-  \st@(TunnelLoggerState c p) -> case c of
-    True -> (st, sockPut s)
-    False -> (TunnelLoggerState c (s:p), pure ())
+enqueueMsg x s = updateLogger x $ \st@(TunnelLoggerState c p) -> case c of
+  True -> (st, sockPut s)
+  False -> (TunnelLoggerState c (s:p), pure ())
 
 log
   :: (MonadIO m, MonadReader r m, HasStoreSocket r)
@@ -148,7 +179,7 @@ startWork
   :: (MonadIO m, MonadReader r m, HasStoreSocket r)
   => TunnelLogger r
   -> m ()
-startWork x = join $ liftIO $ atomicModifyIORef' (_tunnelLogger_state x) $ \(TunnelLoggerState _ p) -> (,)
+startWork x = updateLogger x $ \(TunnelLoggerState _ p) -> (,)
   (TunnelLoggerState True []) $
   (traverse_ sockPut $ reverse p)
 
@@ -157,7 +188,7 @@ stopWork
   :: (MonadIO m, MonadReader r m, HasStoreSocket r)
   => TunnelLogger r
   -> m ()
-stopWork x = join $ liftIO $ atomicModifyIORef (_tunnelLogger_state x) $ \_ -> (,)
+stopWork x = updateLogger x $ \_ -> (,)
   (TunnelLoggerState False [])
   (sockPut $ put int StderrLast)
 
@@ -173,11 +204,18 @@ stopWorkOnError
   => TunnelLogger r
   -> ErrorInfo
   -> m Bool
-stopWorkOnError x ex = join $ liftIO $ atomicModifyIORef (_tunnelLogger_state x) $ \st ->
+stopWorkOnError x ex = updateLogger x $ \st ->
   case _tunnelLoggerState_canSendStderr st of
     False -> (st, pure False)
     True -> (,) (TunnelLoggerState False []) $ do
       asks P.protoVersion >>= \pv -> if protoVersion_minor pv >= 26
         then sockPut $ put int StderrError >> put errorInfo ex
-        else sockPut $ put int StderrError >> put text (T.pack $ show ex) >> put int 0
+        else sockPut $ put int StderrError >> put text (T.pack $ show ex) >> put int (0 :: Word)
       pure True
+
+updateLogger
+  :: (MonadIO m, MonadReader r m, HasStoreSocket r)
+  => TunnelLogger r
+  -> (TunnelLoggerState r -> (TunnelLoggerState r, m a))
+  -> m a
+updateLogger x = join . liftIO . atomicModifyIORef (_tunnelLogger_state x)
