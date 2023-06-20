@@ -323,6 +323,10 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
 
     P.OptimiseStore -> simpleOp' $ pure R.OptimiseStore
 
+    P.VerifyStore -> simpleOpRet' bool $ sockGet $ R.VerifyStore
+      <$> get bool
+      <*> get bool
+
 ---
 
 data TunnelLogger r = TunnelLogger
