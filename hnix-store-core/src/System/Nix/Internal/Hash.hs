@@ -3,6 +3,7 @@ Description : Cryptographic hashing interface for hnix-store, on top
               of the cryptohash family of libraries.
 -}
 {-# language AllowAmbiguousTypes #-}
+{-# language GADTs               #-}
 {-# language TypeFamilies        #-}
 {-# language ScopedTypeVariables #-}
 {-# language DataKinds           #-}
@@ -11,6 +12,10 @@ Description : Cryptographic hashing interface for hnix-store, on top
 
 module System.Nix.Internal.Hash
   ( NamedAlgo(..)
+  , HashAlgo(..)
+  , SomeHashAlgo
+  , algoToText
+  , textToAlgo
   , SomeNamedDigest(..)
   , mkNamedDigest
   , encodeDigestWith
@@ -22,6 +27,7 @@ where
 import qualified Text.Show
 import qualified Crypto.Hash            as C
 import qualified Data.ByteString        as BS
+import           Data.Some
 import qualified Data.Text              as T
 import           System.Nix.Internal.Base
 import           Data.ByteArray
@@ -44,6 +50,29 @@ instance NamedAlgo C.SHA256 where
 instance NamedAlgo C.SHA512 where
   algoName = "sha512"
 
+data HashAlgo :: Type -> Type where
+  HashAlgo_MD5 :: HashAlgo C.MD5
+  HashAlgo_SHA1 :: HashAlgo C.SHA1
+  HashAlgo_SHA256 :: HashAlgo C.SHA256
+  HashAlgo_SHA512 :: HashAlgo C.SHA512
+
+type SomeHashAlgo = Some HashAlgo
+
+algoToText :: forall t. HashAlgo t -> Text
+algoToText = \case
+  HashAlgo_MD5 -> algoName @t
+  HashAlgo_SHA1 -> algoName @t
+  HashAlgo_SHA256 -> algoName @t
+  HashAlgo_SHA512 -> algoName @t
+
+textToAlgo :: Text -> Either String SomeHashAlgo
+textToAlgo = \case
+    "md5"    -> Right $ Some HashAlgo_MD5
+    "sha1"   -> Right $ Some HashAlgo_SHA1
+    "sha256" -> Right $ Some HashAlgo_SHA256
+    "sha512" -> Right $ Some HashAlgo_SHA512
+    name     -> Left $ "Unknown hash name: " <> toString name
+
 -- | A digest whose 'NamedAlgo' is not known at compile time.
 data SomeNamedDigest = forall a . NamedAlgo a => SomeDigest (C.Digest a)
 
@@ -58,12 +87,11 @@ mkNamedDigest name sriHash =
     then mkDigest h
     else Left $ toString $ "Sri hash method " <> sriName <> " does not match the required hash type " <> name
  where
-  mkDigest h = case name of
-    "md5"    -> SomeDigest <$> decodeGo C.MD5    h
-    "sha1"   -> SomeDigest <$> decodeGo C.SHA1   h
-    "sha256" -> SomeDigest <$> decodeGo C.SHA256 h
-    "sha512" -> SomeDigest <$> decodeGo C.SHA512 h
-    _        -> Left $ "Unknown hash name: " <> toString name
+  mkDigest h = textToAlgo name >>= \(Some a) -> case a of
+    HashAlgo_MD5    -> SomeDigest <$> decodeGo C.MD5    h
+    HashAlgo_SHA1   -> SomeDigest <$> decodeGo C.SHA1   h
+    HashAlgo_SHA256 -> SomeDigest <$> decodeGo C.SHA256 h
+    HashAlgo_SHA512 -> SomeDigest <$> decodeGo C.SHA512 h
   decodeGo :: forall a . NamedAlgo a => a -> Text -> Either String (C.Digest a)
   decodeGo a h
     | size == base16Len = decodeDigestWith Base16 h

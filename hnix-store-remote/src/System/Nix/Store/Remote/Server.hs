@@ -11,14 +11,20 @@ import           Prelude                       hiding ( bool, put, get )
 import           Control.Concurrent.Classy.Async
 import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.Catch
+import qualified Data.HashSet as HashSet
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T (putStrLn)
 import           Network.Socket
+import           Network.Socket.ByteString
 
 import           System.Nix.StorePath ( StoreDir
                                       , StorePath
+                                      , StorePathName(..)
                                       )
+import           System.Nix.StorePathMetadata
+
+import           System.Nix.Nar                 ( NarSource )
 
 import           System.Nix.Store.Remote.Binary as RB
 import           System.Nix.Store.Remote.Socket
@@ -146,8 +152,8 @@ simpleOp
   -> m (StoreRequest ())
   -> m ()
 simpleOp workerHelper tunnelLogger m = do
-  req <- simpleOpRet tunnelLogger m
-  workerHelper req
+  req <- m
+  bracketLogger tunnelLogger $ workerHelper req
   sockPut $ put bool True
 
 simpleOpRet
@@ -155,18 +161,39 @@ simpleOpRet
      , HasStoreSocket r
      , MonadReader r m
      )
+  => (StoreRequest a -> m a)
+  -> TunnelLogger r
+  -> Serializer r a
+  -> m (StoreRequest a)
+  -> m ()
+simpleOpRet workerHelper tunnelLogger s m = do
+  req <- m
+  resp <- bracketLogger tunnelLogger $ workerHelper req
+  sockPut $ put s resp
+
+bracketLogger
+  :: ( MonadIO m
+     , HasStoreSocket r
+     , MonadReader r m
+     )
   => TunnelLogger r
   -> m a
   -> m a
-simpleOpRet tunnelLogger m = do
+bracketLogger tunnelLogger m = do
   startWork tunnelLogger
   a <- m
   stopWork tunnelLogger
   pure a
 
+{-# WARNING unimplemented "not yet implemented" #-}
+unimplemented :: WorkerException
+unimplemented = WorkerException_Error $ WorkerError_UnsupportedOperation "not yet implemented"
 
 performOp
-  :: MonadIO m
+  :: forall m
+  .  ( MonadIO m
+     , MonadThrow m
+     )
   => StoreDir
   -> WorkerHelper m
   -> Socket
@@ -177,28 +204,58 @@ performOp
 performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
   tunnelLogger <- liftIO $ mapTunnelLogger storeConfig_socket tunnelLogger0
   let simpleOp' = simpleOp (lift . workerHelper) tunnelLogger
+  let simpleOpRet'
+        :: Serializer StoreConfig a
+        -> ReaderT StoreConfig m (StoreRequest a)
+        -> ReaderT StoreConfig m ()
+      simpleOpRet' = simpleOpRet (lift . workerHelper) tunnelLogger
+  let invalidOp = WorkerException_Error $ WorkerError_InvalidOperation $ fromIntegral $ fromEnum op
+  let
+
   flip runReaderT (StoreConfig sd protocolVersion sock) $ case op of
+    Reserved_0__ -> throwM invalidOp
+
+    P.IsValidPath -> simpleOpRet' bool $
+      sockGet $ R.IsValidPath
+        <$> get path
+
+    Reserved_2__ -> throwM invalidOp
+
+    HasSubstitutes -> do
+      p <- sockGet $ get path
+      s <- bracketLogger tunnelLogger $
+        lift . workerHelper $ R.QuerySubstitutablePaths $ HashSet.singleton p
+      sockPut $ put bool $ not $ HashSet.null s
+
+    QueryPathHash -> throwM unimplemented
+
+    QueryReferences -> throwM unimplemented
+
+    P.QueryReferrers -> simpleOpRet' (hashSet path) $
+      sockGet $ R.QueryReferrers
+        <$> get path
+
+    P.AddToStore -> do
+      req <- sockGet $ do
+        name <- StorePathName <$> get text
+        _ignore <- get bool
+        recursive <- get bool
+        algo <- get someHashAlgo
+        socket <- asks storeSocket
+        let source :: forall m2. MonadIO m2 => NarSource m2
+            source k = k =<< liftIO (recv sock 8)
+        pure $ R.AddToStore name recursive algo source False
+      p <- bracketLogger tunnelLogger $ lift $ workerHelper req
+      sockPut $ put path p
+
     P.AddTextToStore -> do
-      req <- simpleOpRet tunnelLogger $ sockGet $ R.AddTextToStore
+      req <- sockGet $ R.AddTextToStore
         <$> get text
         <*> get text
         <*> get (hashSet path)
         <*> pure False -- repairing is not supported when building through the Nix daemon
-      p <- lift $ workerHelper req
+      p <- bracketLogger tunnelLogger $ lift $ workerHelper req
       sockPut $ put path p
-
-    P.AddSignatures -> simpleOp' $ sockGet $
-      R.AddSignatures
-        <$> get path
-        <*> get (list lazyByteStringLen)
-
-    P.AddIndirectRoot -> simpleOp' $ sockGet $
-      R.AddIndirectRoot
-        <$> get path
-
-    P.AddTempRoot -> simpleOp' $ sockGet $
-      R.AddTempRoot
-        <$> get path
 
     P.BuildPaths -> simpleOp' $sockGet $
       R.BuildPaths
@@ -209,44 +266,62 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
       R.EnsurePath
         <$> get path
 
-    P.FindRoots -> do
-      req <- simpleOpRet tunnelLogger $ pure $ R.FindRoots
-      p <- lift $ workerHelper req
-      sockPut $ put (strictMap lazyByteStringLen path) p
-
-    P.IsValidPath -> do
-      req <- simpleOpRet tunnelLogger $ sockGet $ R.IsValidPath
+    P.AddTempRoot -> simpleOp' $ sockGet $
+      R.AddTempRoot
         <$> get path
-      b <- lift $ workerHelper req
-      sockPut $ put bool b
 
-    P.QueryValidPaths -> do
-      req <- simpleOpRet tunnelLogger $ sockGet $ R.QueryValidPaths
+    P.AddIndirectRoot -> simpleOp' $ sockGet $
+      R.AddIndirectRoot
+        <$> get path
+
+    P.SyncWithGC -> simpleOp' $ pure R.SyncWithGC
+
+    P.FindRoots -> simpleOpRet'
+      (strictMap lazyByteStringLen path)
+      $ pure R.FindRoots
+
+    Reserved_15__ -> throwM invalidOp
+
+    P.ExportPath -> throwM unimplemented
+
+    Reserved_17__ -> throwM invalidOp
+
+    QueryDeriver -> do
+      p <- sockGet $ get path
+      m_info <- bracketLogger tunnelLogger $
+        lift . workerHelper $ R.QueryPathInfo p
+      sockPut $ put maybePath $ deriverPath =<< m_info
+
+    SetOptions -> throwM unimplemented
+
+    CollectGarbage -> throwM unimplemented
+
+    P.AddSignatures -> simpleOp' $ sockGet $
+      R.AddSignatures
+        <$> get path
+        <*> get (list lazyByteStringLen)
+
+    P.QueryValidPaths -> simpleOpRet' (hashSet path) $
+      sockGet $ R.QueryValidPaths
         <$> get (hashSet path)
         <*> get bool
-      paths <- lift $ workerHelper req
-      sockPut $ put (hashSet path) paths
 
-    P.QueryAllValidPaths -> do
-      req <- simpleOpRet tunnelLogger $ pure $ R.QueryAllValidPaths
-      paths <- lift $ workerHelper req
-      sockPut $ put (hashSet path) paths
+    P.QueryAllValidPaths -> simpleOpRet' (hashSet path) $
+      pure $ R.QueryAllValidPaths
 
-    P.QuerySubstitutablePaths -> do
-      req <- simpleOpRet tunnelLogger $ sockGet $ R.QuerySubstitutablePaths
+    P.QuerySubstitutablePaths -> simpleOpRet' (hashSet path) $
+      sockGet $ R.QuerySubstitutablePaths
         <$> get (hashSet path)
-      paths <- lift $ workerHelper req
-      sockPut $ put (hashSet path) paths
 
-    P.QueryPathInfo -> do
-      req <- simpleOpRet tunnelLogger $ sockGet $ R.QueryPathInfo
+    P.QueryPathInfo -> simpleOpRet' (RB.maybe pathMetadata) $
+      sockGet $ R.QueryPathInfo
         <$> get path
-      mPathInfo <- lift $ workerHelper req
-      sockPut $ put (RB.maybe pathMetadata) mPathInfo
+
+    P.QueryValidDerivers -> simpleOpRet' (hashSet path) $
+      sockGet $ R.QueryValidDerivers
+        <$> get path
 
     P.OptimiseStore -> simpleOp' $ pure R.OptimiseStore
-    P.SyncWithGC -> simpleOp' $ pure R.SyncWithGC
-    _ -> error $ "GOT TO " <> show op
 
 ---
 

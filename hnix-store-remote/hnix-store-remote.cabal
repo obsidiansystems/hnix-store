@@ -124,6 +124,7 @@ test-suite hnix-store-remote-tests
     , tasty-hspec
     , tasty-quickcheck
     , linux-namespaces
+    , some
     , temporary
     , unix
     , unordered-containers

@@ -4,6 +4,10 @@ Description : Cryptographic hashes for hnix-store.
 module System.Nix.Hash
   ( Hash.mkStorePathHash
   , Hash.NamedAlgo(..)
+  , Hash.HashAlgo(..)
+  , Hash.SomeHashAlgo
+  , Hash.algoToText
+  , Hash.textToAlgo
   , Hash.SomeNamedDigest(..)
 
   , Hash.mkNamedDigest

@@ -22,7 +22,7 @@ import           Nix.Derivation                 ( Derivation )
 import           System.Nix.Build               ( BuildMode
                                                 , BuildResult
                                                 )
-import           System.Nix.Hash                ( NamedAlgo(..)
+import           System.Nix.Hash                ( SomeHashAlgo
                                                 )
 import           System.Nix.StorePath           ( StorePath
                                                 , StorePathName
@@ -40,12 +40,10 @@ type SubstituteFlag = Bool
 data StoreRequest :: Type -> Type where
   -- | Pack `Nar` and add it to the store.
   AddToStore
-    :: forall a
-    .  NamedAlgo a
-    => Proxy a
-    -> StorePathName        -- ^ Name part of the newly created `StorePath`
-    -> (forall m. MonadIO m => NarSource m) -- ^ provide nar stream
+    :: StorePathName        -- ^ Name part of the newly created `StorePath`
     -> Bool                 -- ^ Add target directory recursively
+    -> SomeHashAlgo
+    -> (forall m. MonadIO m => NarSource m) -- ^ provide nar stream
     -> RepairFlag           -- ^ Only used by local store backend
     -> StoreRequest StorePath
 

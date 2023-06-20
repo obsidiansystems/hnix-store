@@ -20,12 +20,13 @@ import           Prelude                       hiding ( bool, put, get )
 import qualified Data.Binary.Get as B
 import qualified Data.Binary.Put as B
 import qualified Data.ByteString
+import           Data.Some
 
 import           Network.Socket.ByteString      ( recv
                                                 , sendAll
                                                 )
 
-import           System.Nix.Hash                ( NamedAlgo(..)
+import           System.Nix.Hash                ( HashAlgo(..)
                                                 , BaseEncoding(NixBase32)
                                                 )
 import           System.Nix.Internal.Base       ( encodeWith )
@@ -75,13 +76,14 @@ runOpArgsIO op encoder = do
 
 doReq :: StoreRequest a -> MonadStore a
 doReq = \case
-  R.AddToStore (Proxy :: Proxy a) name source recursive _repair -> do
+  R.AddToStore name recursive sha@(Some hashAlgo) source _repair -> do
     runOpArgsIO P.AddToStore $ \yield -> do
       yield $ toStrict $ B.runPut $ (`runReaderT` ()) $ do
         put text $ System.Nix.StorePath.unStorePathName name
-        put bool $ not $ System.Nix.Hash.algoName @a == "sha256" && recursive
+        put bool $ not $ recursive &&
+          case hashAlgo of HashAlgo_SHA256 -> True; _ -> False
         put bool recursive
-        put text $ System.Nix.Hash.algoName @a
+        put someHashAlgo sha
       source yield
     sockGetPath
 

@@ -8,6 +8,7 @@ import           Control.Exception              ( bracket )
 import           Control.Concurrent             ( threadDelay )
 import qualified Data.ByteString.Char8         as BSC
 import qualified Data.HashSet                  as HS
+import           Data.Some
 import qualified Data.Map.Strict               as M
 import           System.Directory
 import           System.IO.Temp
@@ -24,6 +25,7 @@ import           Test.Hspec.Expectations.Lifted
 import           System.FilePath
 
 import           System.Nix.Build
+import           System.Nix.Hash                ( HashAlgo(HashAlgo_SHA256) )
 import           System.Nix.StorePath
 import           System.Nix.Store.Remote
 import           System.Nix.Store.Remote.Client
@@ -165,7 +167,7 @@ withPath action = do
 dummy :: MonadStore StorePath
 dummy = do
   let Right n = makeStorePathName "dummy"
-  doReq $ AddToStore @SHA256 Proxy n (dumpPath "dummy") False False
+  doReq $ AddToStore n False (Some HashAlgo_SHA256) (dumpPath "dummy") False
 
 invalidPath :: StorePath
 invalidPath =
@@ -277,7 +279,7 @@ makeSpecProtocol f = Hspec.around f $
       itRights "adds file to store" $ do
         fp <- liftIO $ writeSystemTempFile "addition" "lal"
         let Right n = makeStorePathName "tmp-addition"
-        res <- doReq $ AddToStore @SHA256 Proxy n (dumpPath fp) False False
+        res <- doReq $ AddToStore n False (Some HashAlgo_SHA256) (dumpPath fp) False
         liftIO $ print res
 
     context "with dummy" $ do

@@ -33,7 +33,9 @@ module System.Nix.Store.Remote.Binary
   , field
   , errorInfo
   -- *
+  , someHashAlgo
   , path
+  , maybePath
   , derivationOutput
   , derivation
   , buildResult
@@ -48,15 +50,14 @@ import           Prelude                 hiding (bool, map, maybe, put, get, put
 import qualified Data.Binary.Get               as B
 import qualified Data.Binary.Put               as B
 import qualified Data.ByteString.Lazy          as BSL
---import           Data.Some
+import           Data.Some
 import           Data.Time
 import           Data.Time.Clock.POSIX
 
 import           Nix.Derivation hiding (path)
 
 import           System.Nix.Build
---import           System.Nix.Hash                ( BaseEncoding(NixBase32)
---                                                )
+import           System.Nix.Hash
 import           System.Nix.StorePath
 import           System.Nix.Hash                ( SomeNamedDigest(..)
                                                 , BaseEncoding(NixBase32)
@@ -239,6 +240,12 @@ field = Serializer
 
 errorInfo :: Serializer r ErrorInfo
 errorInfo = undefined
+
+someHashAlgo :: Serializer r SomeHashAlgo
+someHashAlgo = Serializer
+  { get = (=<<) (either fail pure) $ textToAlgo <$> get text
+  , put = \(Some a) -> put text $ algoToText a
+  }
 
 path :: HasStoreDir r => Serializer r StorePath
 path = Serializer
