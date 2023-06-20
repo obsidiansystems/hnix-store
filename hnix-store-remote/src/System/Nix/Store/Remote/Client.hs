@@ -20,6 +20,7 @@ import           Prelude                       hiding ( bool, put, get )
 import qualified Data.Binary.Get as B
 import qualified Data.Binary.Put as B
 import qualified Data.ByteString
+import qualified Data.HashSet as HashSet
 import           Data.Some
 
 import           Network.Socket.ByteString      ( recv
@@ -33,6 +34,7 @@ import           System.Nix.Internal.Base       ( encodeWith )
 import qualified System.Nix.StorePath
 import           System.Nix.StorePath           ( StorePath
                                                 , StorePathSet
+                                                , StorePathName(..)
                                                 )
 import           System.Nix.Store.Remote.Binary as RB
 import           System.Nix.Store.Remote.Logger
@@ -121,7 +123,7 @@ doReq = \case
       -- but without it protocol just hangs waiting for
       -- more data. Needs investigation.
       -- Intentionally the only warning that should pop-up.
-      put int (0 :: Integer)
+      put int (0 :: Word32)
     sockGet $ get buildResult
 
   R.EnsurePath pn -> do
@@ -176,12 +178,11 @@ doReq = \case
 
   R.QueryDerivationOutputNames p -> do
     runOpArgs P.QueryDerivationOutputNames $ put path p
-    sockGetPaths
+    sockGet $ get (hashSet storePathName)
 
   R.QueryPathFromHashPart storePathHash -> do
     runOpArgs P.QueryPathFromHashPart
-      $ put byteStringLen
-      $ encodeUtf8 (encodeWith NixBase32 $ coerce storePathHash)
+      $ put storePathHashPart storePathHash
     sockGetPath
 
   R.QueryMissing ps -> do

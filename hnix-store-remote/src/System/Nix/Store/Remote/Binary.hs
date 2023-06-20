@@ -34,6 +34,8 @@ module System.Nix.Store.Remote.Binary
   , errorInfo
   -- *
   , someHashAlgo
+  , storePathName
+  , storePathHashPart
   , path
   , maybePath
   , derivationOutput
@@ -56,12 +58,14 @@ import           Data.Time.Clock.POSIX
 
 import           Nix.Derivation hiding (path)
 
+import           System.Nix.Internal.Base       ( decodeWith
+                                                , encodeWith
+                                                )
 import           System.Nix.Build
 import           System.Nix.Hash
-import           System.Nix.StorePath
+import           System.Nix.StorePath           hiding ( storePathName )
 import           System.Nix.Hash                ( SomeNamedDigest(..)
                                                 , BaseEncoding(NixBase32)
-                                                , decodeDigestWith
                                                 )
 import           System.Nix.StorePathMetadata
 import qualified System.Nix.Store.Remote.Parsers
@@ -242,10 +246,16 @@ errorInfo :: Serializer r ErrorInfo
 errorInfo = undefined
 
 someHashAlgo :: Serializer r SomeHashAlgo
-someHashAlgo = Serializer
-  { get = (=<<) (either fail pure) $ textToAlgo <$> get text
-  , put = \(Some a) -> put text $ algoToText a
-  }
+someHashAlgo = mapPrismSerializer textToAlgo (foldSome algoToText) text
+
+-- TODO validate
+storePathName :: Serializer r StorePathName
+storePathName = mapIsoSerializer StorePathName unStorePathName text
+
+storePathHashPart :: Serializer r StorePathHashPart
+storePathHashPart = mapIsoSerializer coerce coerce $
+  mapPrismSerializer (decodeWith NixBase32) (encodeWith NixBase32) $
+  text
 
 path :: HasStoreDir r => Serializer r StorePath
 path = Serializer

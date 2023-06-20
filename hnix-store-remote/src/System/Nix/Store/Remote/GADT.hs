@@ -131,7 +131,7 @@ data StoreRequest :: Type -> Type where
 
   QueryDerivationOutputNames
     :: StorePath
-    -> StoreRequest StorePathSet
+    -> StoreRequest (HashSet StorePathName)
 
   QueryPathFromHashPart
     :: StorePathHashPart

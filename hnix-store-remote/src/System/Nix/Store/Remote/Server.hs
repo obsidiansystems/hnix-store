@@ -228,7 +228,6 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
       sockPut $ put bool $ not $ HashSet.null s
 
     QueryPathHash -> throwM unimplemented
-
     QueryReferences -> throwM unimplemented
 
     P.QueryReferrers -> simpleOpRet' (hashSet path) $
@@ -281,9 +280,7 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
       $ pure R.FindRoots
 
     Reserved_15__ -> throwM invalidOp
-
     P.ExportPath -> throwM unimplemented
-
     Reserved_17__ -> throwM invalidOp
 
     QueryDeriver -> do
@@ -293,29 +290,43 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
       sockPut $ put maybePath $ deriverPath =<< m_info
 
     SetOptions -> throwM unimplemented
-
     CollectGarbage -> throwM unimplemented
+    QuerySubstitutablePathInfo -> throwM unimplemented
 
-    P.AddSignatures -> simpleOp' $ sockGet $
-      R.AddSignatures
+    P.QueryDerivationOutputs -> simpleOpRet' (hashSet path) $ sockGet $
+      R.QueryDerivationOutputs
         <$> get path
-        <*> get (list lazyByteStringLen)
+
+    P.QueryAllValidPaths -> simpleOpRet' (hashSet path) $
+      pure $ R.QueryAllValidPaths
+
+    P.QueryFailedPaths -> throwM unimplemented
+    P.ClearFailedPaths -> throwM unimplemented
+
+    P.QueryPathInfo -> simpleOpRet' (RB.maybe pathMetadata) $
+      sockGet $ R.QueryPathInfo
+        <$> get path
+
+    P.ImportPaths -> throwM unimplemented
+
+    P.QueryDerivationOutputNames -> simpleOpRet' (hashSet storePathName) $ sockGet $
+      R.QueryDerivationOutputNames
+        <$> get path
+
+    P.QueryPathFromHashPart -> simpleOpRet' path $ sockGet $
+      R.QueryPathFromHashPart
+        <$> get storePathHashPart
+
+    QuerySubstitutablePathInfos -> throwM unimplemented
 
     P.QueryValidPaths -> simpleOpRet' (hashSet path) $
       sockGet $ R.QueryValidPaths
         <$> get (hashSet path)
         <*> get bool
 
-    P.QueryAllValidPaths -> simpleOpRet' (hashSet path) $
-      pure $ R.QueryAllValidPaths
-
     P.QuerySubstitutablePaths -> simpleOpRet' (hashSet path) $
       sockGet $ R.QuerySubstitutablePaths
         <$> get (hashSet path)
-
-    P.QueryPathInfo -> simpleOpRet' (RB.maybe pathMetadata) $
-      sockGet $ R.QueryPathInfo
-        <$> get path
 
     P.QueryValidDerivers -> simpleOpRet' (hashSet path) $
       sockGet $ R.QueryValidDerivers
@@ -323,9 +334,22 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
 
     P.OptimiseStore -> simpleOp' $ pure R.OptimiseStore
 
-    P.VerifyStore -> simpleOpRet' bool $ sockGet $ R.VerifyStore
-      <$> get bool
-      <*> get bool
+    P.VerifyStore -> simpleOpRet' bool $ sockGet $
+      R.VerifyStore
+        <$> get bool
+        <*> get bool
+
+    P.BuildDerivation -> simpleOpRet' buildResult $ sockGet $
+      R.BuildDerivation
+        <$> get path
+        <*> get derivation
+        <*> get enum
+      <* get (int :: Serializer r Word32)
+
+    P.AddSignatures -> simpleOp' $ sockGet $
+      R.AddSignatures
+        <$> get path
+        <*> get (list lazyByteStringLen)
 
 ---
 
