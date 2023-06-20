@@ -20,7 +20,6 @@ import           Prelude                       hiding ( bool, put, get )
 import qualified Data.Binary.Get as B
 import qualified Data.Binary.Put as B
 import qualified Data.ByteString
-import qualified Data.Map.Strict
 
 import           Network.Socket.ByteString      ( recv
                                                 , sendAll
@@ -34,7 +33,7 @@ import qualified System.Nix.StorePath
 import           System.Nix.StorePath           ( StorePath
                                                 , StorePathSet
                                                 )
-import           System.Nix.Store.Remote.Binary
+import           System.Nix.Store.Remote.Binary as RB
 import           System.Nix.Store.Remote.Logger
 import           System.Nix.Store.Remote.MonadStore
 import           System.Nix.Store.Remote.Socket
@@ -109,7 +108,7 @@ doReq = \case
   R.BuildPaths ps bm -> do
     void $ simpleOpArgs P.BuildPaths $ do
       put (hashSet path) ps
-      put int $ fromEnum bm
+      put enum bm
 
   R.BuildDerivation p drv buildMode -> do
     runOpArgs P.BuildDerivation $ do
@@ -128,8 +127,7 @@ doReq = \case
 
   R.FindRoots -> do
     runOp P.FindRoots
-    r <- sockGet $ get $ list $ tup lazyByteStringLen path
-    pure $ Data.Map.Strict.fromList r
+    sockGet $ get (strictMap lazyByteStringLen path)
   {-
    where
     catRights :: [(a, Either String b)] -> MonadStore [(a, b)]
@@ -140,7 +138,7 @@ doReq = \case
     ex (_x, Left e ) = error $ "Unable to decode root: " <> fromString e
   -}
 
-  R.IsValidPathUncached p -> do
+  R.IsValidPath p -> do
     simpleOpArgs P.IsValidPath $ put path p
 
   R.QueryValidPaths ps substitute -> do
@@ -157,13 +155,10 @@ doReq = \case
     runOpArgs P.QuerySubstitutablePaths $ put (hashSet path) ps
     sockGetPaths
 
-  R.QueryPathInfoUncached key -> do
+  R.QueryPathInfo key -> do
     runOpArgs P.QueryPathInfo $ do
       put path key
-    valid <- sockGet $ get bool
-    unless valid $ error "Path is not valid"
-    meta <- sockGet $ get pathMetadata
-    pure $ (key, meta)
+    sockGet $ get (RB.maybe pathMetadata)
 
   R.QueryReferrers p -> do
     runOpArgs P.QueryReferrers $ put path p

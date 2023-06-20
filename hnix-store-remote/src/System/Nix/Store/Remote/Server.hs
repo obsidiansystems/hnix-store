@@ -6,10 +6,10 @@
 {-# LANGUAGE LambdaCase #-}
 module System.Nix.Store.Remote.Server where
 
-import           Prelude                       hiding ( IORef, newIORef, atomicModifyIORef, bool, put, get )
+import           Prelude                       hiding ( bool, put, get )
 
 import           Control.Concurrent.Classy.Async
-import           Control.Monad.Conc.Class
+import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.Catch
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
@@ -20,11 +20,12 @@ import           System.Nix.StorePath ( StoreDir
                                       , StorePath
                                       )
 
-import           System.Nix.Store.Remote.Binary
+import           System.Nix.Store.Remote.Binary as RB
 import           System.Nix.Store.Remote.Socket
 import           System.Nix.Store.Remote.GADT as R
 import qualified System.Nix.Store.Remote.Protocol as P
 import           System.Nix.Store.Remote.Protocol hiding ( protoVersion )
+import           System.Nix.Store.Remote.MonadStore ( StoreConfig(..) )
 
 
 type WorkerHelper m = forall a. StoreRequest a -> m a
@@ -82,7 +83,7 @@ instance Exception WorkerException
 processConnection
   :: (MonadIO m, MonadMask m)
   => StoreDir
-  -> (forall a. StoreRequest a -> m a)
+  -> WorkerHelper m
   -> Socket
   -> m ()
 processConnection sd workerHelper sock = do
@@ -135,20 +136,122 @@ processConnection sd workerHelper sock = do
   liftIO $ T.putStrLn "daemon connection done"
   liftIO $ close sock
 
+simpleOp
+  :: ( MonadIO m
+     , HasStoreSocket r
+     , MonadReader r m
+     )
+  => (StoreRequest () -> m ())
+  -> TunnelLogger r
+  -> m (StoreRequest ())
+  -> m ()
+simpleOp workerHelper tunnelLogger m = do
+  req <- simpleOpRet tunnelLogger m
+  workerHelper req
+  sockPut $ put bool True
+
+simpleOpRet
+  :: ( MonadIO m
+     , HasStoreSocket r
+     , MonadReader r m
+     )
+  => TunnelLogger r
+  -> m a
+  -> m a
+simpleOpRet tunnelLogger m = do
+  startWork tunnelLogger
+  a <- m
+  stopWork tunnelLogger
+  pure a
+
+
 performOp
-  :: StoreDir
+  :: MonadIO m
+  => StoreDir
   -> WorkerHelper m
   -> Socket
   -> ProtoVersion
-  -> TunnelLogger r
+  -> TunnelLogger Socket
   -> WorkerOp
   -> m ()
-performOp _sd _workerHelper _sock _protoVersion _tunnelLogger op = error $ "GOT TO " <> show op
+performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
+  tunnelLogger <- liftIO $ mapTunnelLogger storeConfig_socket tunnelLogger0
+  let simpleOp' = simpleOp (lift . workerHelper) tunnelLogger
+  flip runReaderT (StoreConfig sd protocolVersion sock) $ case op of
+    P.AddTextToStore -> do
+      req <- simpleOpRet tunnelLogger $ sockGet $ R.AddTextToStore
+        <$> get text
+        <*> get text
+        <*> get (hashSet path)
+        <*> pure False -- repairing is not supported when building through the Nix daemon
+      p <- lift $ workerHelper req
+      sockPut $ put path p
+
+    P.AddSignatures -> simpleOp' $ sockGet $
+      R.AddSignatures
+        <$> get path
+        <*> get (list lazyByteStringLen)
+
+    P.AddIndirectRoot -> simpleOp' $ sockGet $
+      R.AddIndirectRoot
+        <$> get path
+
+    P.AddTempRoot -> simpleOp' $ sockGet $
+      R.AddTempRoot
+        <$> get path
+
+    P.BuildPaths -> simpleOp' $sockGet $
+      R.BuildPaths
+        <$> get (hashSet path)
+        <*> get enum
+
+    P.EnsurePath -> simpleOp' $ sockGet $
+      R.EnsurePath
+        <$> get path
+
+    P.FindRoots -> do
+      req <- simpleOpRet tunnelLogger $ pure $ R.FindRoots
+      p <- lift $ workerHelper req
+      sockPut $ put (strictMap lazyByteStringLen path) p
+
+    P.IsValidPath -> do
+      req <- simpleOpRet tunnelLogger $ sockGet $ R.IsValidPath
+        <$> get path
+      b <- lift $ workerHelper req
+      sockPut $ put bool b
+
+    P.QueryValidPaths -> do
+      req <- simpleOpRet tunnelLogger $ sockGet $ R.QueryValidPaths
+        <$> get (hashSet path)
+        <*> get bool
+      paths <- lift $ workerHelper req
+      sockPut $ put (hashSet path) paths
+
+    P.QueryAllValidPaths -> do
+      req <- simpleOpRet tunnelLogger $ pure $ R.QueryAllValidPaths
+      paths <- lift $ workerHelper req
+      sockPut $ put (hashSet path) paths
+
+    P.QuerySubstitutablePaths -> do
+      req <- simpleOpRet tunnelLogger $ sockGet $ R.QuerySubstitutablePaths
+        <$> get (hashSet path)
+      paths <- lift $ workerHelper req
+      sockPut $ put (hashSet path) paths
+
+    P.QueryPathInfo -> do
+      req <- simpleOpRet tunnelLogger $ sockGet $ R.QueryPathInfo
+        <$> get path
+      mPathInfo <- lift $ workerHelper req
+      sockPut $ put (RB.maybe pathMetadata) mPathInfo
+
+    P.OptimiseStore -> simpleOp' $ pure R.OptimiseStore
+    P.SyncWithGC -> simpleOp' $ pure R.SyncWithGC
+    _ -> error $ "GOT TO " <> show op
 
 ---
 
 data TunnelLogger r = TunnelLogger
-  { _tunnelLogger_state :: IORef IO (TunnelLoggerState r)
+  { _tunnelLogger_state :: IORef (TunnelLoggerState r)
   }
 
 data TunnelLoggerState r = TunnelLoggerState
@@ -159,6 +262,19 @@ data TunnelLoggerState r = TunnelLoggerState
 newTunnelLogger :: IO (TunnelLogger r)
 newTunnelLogger = TunnelLogger <$> newIORef (TunnelLoggerState False [])
 
+mapTunnelLogger
+  :: (s -> r)
+  -> TunnelLogger r
+  -> IO (TunnelLogger s)
+mapTunnelLogger f logger = do
+  s <- readIORef (_tunnelLogger_state logger)
+  stateRef <- newIORef $ TunnelLoggerState
+    { _tunnelLoggerState_canSendStderr = _tunnelLoggerState_canSendStderr s
+    , _tunnelLoggerState_pendingMsgs = withReaderT f <$> _tunnelLoggerState_pendingMsgs s
+    }
+  pure $ TunnelLogger
+    { _tunnelLogger_state = stateRef
+    }
 enqueueMsg
   :: (MonadIO m, MonadReader r m, HasStoreSocket r)
   => TunnelLogger r

@@ -2,6 +2,7 @@
 Description : Utilities for packing stuff
 Maintainer  : srk <srk@48.io>
 |-}
+{-# language GADTs #-}
 {-# language ScopedTypeVariables #-}
 {-# language RecordWildCards     #-}
 module System.Nix.Store.Remote.Binary
@@ -16,11 +17,13 @@ module System.Nix.Store.Remote.Binary
   , bool
   , enum
   , time
+  , maybe
   , list
   , set
   , hashSet
   , tup
-  , map
+  , lazyMap
+  , strictMap
   , lazyByteStringLen
   , byteStringLen
   , text
@@ -35,19 +38,25 @@ module System.Nix.Store.Remote.Binary
   , derivation
   , buildResult
   , pathMetadata
+  -- -- *
+  -- , storeRequest
   ) where
 
-import           Prelude                 hiding (bool, map, put, get, putText )
+import qualified Prelude
+import           Prelude                 hiding (bool, map, maybe, put, get, putText )
 
 import qualified Data.Binary.Get               as B
 import qualified Data.Binary.Put               as B
 import qualified Data.ByteString.Lazy          as BSL
+--import           Data.Some
 import           Data.Time
 import           Data.Time.Clock.POSIX
 
 import           Nix.Derivation hiding (path)
 
 import           System.Nix.Build
+--import           System.Nix.Hash                ( BaseEncoding(NixBase32)
+--                                                )
 import           System.Nix.StorePath
 import           System.Nix.Hash                ( SomeNamedDigest(..)
                                                 , BaseEncoding(NixBase32)
@@ -56,12 +65,15 @@ import           System.Nix.Hash                ( SomeNamedDigest(..)
 import           System.Nix.StorePathMetadata
 import qualified System.Nix.Store.Remote.Parsers
 import           System.Nix.Store.Remote.TextConv
-import           System.Nix.Store.Remote.Protocol hiding ( protoVersion )
+--import           System.Nix.Store.Remote.GADT as R
+--import qualified System.Nix.Store.Remote.Protocol as P
+import           System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
 import           Crypto.Hash                    ( SHA256 )
 
 import           Data.Bits
 import qualified Data.HashSet
-import qualified Data.Map
+import qualified Data.Map.Lazy
+import qualified Data.Map.Strict
 import qualified Data.Set
 
 type Get r = ReaderT r B.Get
@@ -115,6 +127,19 @@ enum = mapIsoSerializer (toEnum) fromEnum int
 time :: Serializer r UTCTime
 time = mapPrismSerializer (Right . posixSecondsToUTCTime) utcTimeToPOSIXSeconds enum
 
+maybe :: Serializer r a -> Serializer r (Maybe a)
+maybe a = Serializer
+  { get = do
+      n :: Word8 <- get int
+      case n of
+        0 -> pure Nothing
+        1 -> Just <$> get a
+        _ -> fail "invalid tag for maybe"
+  , put = \case
+      Nothing -> put int (0 :: Word8)
+      Just x -> put int (1 :: Word8) >> put a x
+  }
+
 list :: Serializer r a -> Serializer r [a]
 list a = Serializer
   { get = do
@@ -139,8 +164,12 @@ tup a b = Serializer
       put b y
   }
 
-map :: Ord k => Serializer r k -> Serializer r v -> Serializer r (Map k v)
-map k v = mapIsoSerializer Data.Map.fromList Data.Map.toList $
+lazyMap :: Ord k => Serializer r k -> Serializer r v -> Serializer r (Map k v)
+lazyMap k v = mapIsoSerializer Data.Map.Lazy.fromList Data.Map.Lazy.toList $
+  list $ tup k v
+
+strictMap :: Ord k => Serializer r k -> Serializer r v -> Serializer r (Map k v)
+strictMap k v = mapIsoSerializer Data.Map.Strict.fromList Data.Map.Strict.toList $
   list $ tup k v
 
 lazyByteStringLen :: Serializer r BSL.ByteString
@@ -174,7 +203,7 @@ text = mapPrismSerializer (Right . bslToText) textToBSL lazyByteStringLen
 maybeText :: Serializer r (Maybe Text)
 maybeText = mapIsoSerializer
   (\case "" -> Nothing; t -> Just t)
-  (maybe "" id)
+  (Prelude.maybe "" id)
   text
 
 protoVersion :: Serializer r ProtoVersion
@@ -259,7 +288,7 @@ derivationOutput = Serializer
 derivation :: HasStoreDir r => Serializer r (Derivation StorePath Text)
 derivation = Serializer
   { get = do
-      outputs <- get (map text derivationOutput)
+      outputs <- get (strictMap text derivationOutput)
 
       inputSrcs <- get (set path)
       let inputDrvs = error "This is BasicDerivation, we need to change types"
@@ -267,17 +296,17 @@ derivation = Serializer
       builder <- get text
       args <- fromList <$> get (list text)
 
-      env <- get (map text text)
+      env <- get (strictMap text text)
       pure $ Derivation{..}
   , put = \Derivation{..} -> do
-      put (map text derivationOutput) outputs
+      put (strictMap text derivationOutput) outputs
 
       put (set path) inputSrcs
       put text platform
       put text builder
       put (list text) $ toList args
 
-      put (map text text) env
+      put (strictMap text text) env
   }
 
 buildResult :: HasStoreDir r => Serializer r BuildResult
@@ -293,7 +322,7 @@ buildResult = Serializer
       <*> get time
   , put = \(BuildResult a b c d e f) -> do
       put enum a
-      maybe (pure ()) (put byteStringLen . textToBS) b
+      Prelude.maybe (pure ()) (put byteStringLen . textToBS) b
       put int c
       put bool d
       put time e
@@ -338,3 +367,16 @@ pathMetadata = Serializer
       pure $ StorePathMetadata{..}
   , put = undefined -- TODO
   }
+
+{-
+storeRequest :: Serializer r (Some StoreRequest)
+storeRequest = Serializer
+  { get = undefined -- TODO
+  , put = \(Some f) -> case f of
+      R.AddToStore (Proxy :: Proxy a) name _source recursive _repair -> do
+        put text $ System.Nix.StorePath.unStorePathName name
+        put bool $ not $ System.Nix.Hash.algoName @a == "sha256" && recursive
+        put bool recursive
+        put text $ System.Nix.Hash.algoName @a
+  }
+-}

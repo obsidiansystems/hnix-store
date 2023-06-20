@@ -54,6 +54,7 @@ library
     , cryptonite
     , directory
     , exceptions
+    , some
     , text
     , time
     , network

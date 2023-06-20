@@ -31,7 +31,6 @@ import           System.Nix.StorePath           ( StorePath
                                                 )
 import           System.Nix.StorePathMetadata  ( StorePathMetadata )
 
-import           System.Nix.Store.Remote.MonadStore
 import           System.Nix.Nar                 ( NarSource )
 
 type RepairFlag = Bool
@@ -45,7 +44,7 @@ data StoreRequest :: Type -> Type where
     .  NamedAlgo a
     => Proxy a
     -> StorePathName        -- ^ Name part of the newly created `StorePath`
-    -> NarSource MonadStore -- ^ provide nar stream
+    -> (forall m. MonadIO m => NarSource m) -- ^ provide nar stream
     -> Bool                 -- ^ Add target directory recursively
     -> RepairFlag           -- ^ Only used by local store backend
     -> StoreRequest StorePath
@@ -99,7 +98,7 @@ data StoreRequest :: Type -> Type where
   FindRoots
     :: StoreRequest (Map BSL.ByteString StorePath)
 
-  IsValidPathUncached
+  IsValidPath
     :: StorePath
     -> StoreRequest Bool
 
@@ -116,9 +115,9 @@ data StoreRequest :: Type -> Type where
     :: StorePathSet
     -> StoreRequest StorePathSet
 
-  QueryPathInfoUncached
+  QueryPathInfo
     :: StorePath
-    -> StoreRequest (StorePath, StorePathMetadata)
+    -> StoreRequest (Maybe StorePathMetadata)
 
   QueryReferrers
     :: StorePath

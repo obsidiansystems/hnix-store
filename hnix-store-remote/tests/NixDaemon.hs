@@ -224,10 +224,10 @@ makeSpecProtocol f = Hspec.around f $
     context "isValidPathUncached" $ do
       itRights "validates path" $ withPath $ \path -> do
         liftIO $ print path
-        doReq (IsValidPathUncached path) `shouldReturn` True
+        doReq (IsValidPath path) `shouldReturn` True
       itLefts "fails on invalid path" $ mapConnectionInfo
         (\sc -> sc { storeConfig_dir = StoreDir "/asdf" })
-        $ doReq $ IsValidPathUncached invalidPath
+        $ doReq $ IsValidPath invalidPath
 
     context "queryAllValidPaths" $ do
       itRights "empty query" $ doReq QueryAllValidPaths
@@ -235,7 +235,7 @@ makeSpecProtocol f = Hspec.around f $
         doReq QueryAllValidPaths `shouldReturn` HS.fromList [path]
 
     context "queryPathInfoUncached" $
-      itRights "queries path info" $ withPath $ doReq . QueryPathInfoUncached
+      itRights "queries path info" $ withPath $ doReq . QueryPathInfo
 
     context "ensurePath" $
       itRights "simple ensure" $ withPath $ doReq . EnsurePath
@@ -286,4 +286,4 @@ makeSpecProtocol f = Hspec.around f $
       itRights "valid dummy" $ do
         path <- dummy
         liftIO $ print path
-        doReq (IsValidPathUncached path) `shouldReturn` True
+        doReq (IsValidPath path) `shouldReturn` True
