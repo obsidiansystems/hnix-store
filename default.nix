@@ -1,24 +1,21 @@
-{ rev ?  "272fad732d39b24c4549c475176e0d8cbc8c897a"
-, pkgs ?
-    if ((rev == "") || (rev == "default") || (rev == "local"))
-      then import <nixpkgs> {}
-      # Do not guard with hash, so the project is able to use current channels (rolling `rev`) of Nixpkgs
-      else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
-    // {
-      # Try to build dependencies even if they are marked broken.
-      config.allowBroken = true;
-    }
-}: let
-  overlay = import ./overlay.nix pkgs pkgs.haskell.lib;
-  overrideHaskellPackages = orig: {
-    buildHaskellPackages =
-      orig.buildHaskellPackages.override overrideHaskellPackages;
-    overrides = if orig ? overrides
-      then pkgs.lib.composeExtensions orig.overrides overlay
-      else overlay;
+{
+  reflex-platform ? import ./dep/reflex-platform { }
+}: (reflex-platform.project ({ pkgs, thunkSource, ... }: {
+  name = "hnix-store";
+  src = ./.;
+  compiler-nix-name = "ghc8107";
+  shells = p: with p; [ hnix-store-core hnix-store-remote ];
+  shellTools = {
+    #haskell-language-server = "1.5.0.0";
+    cabal-install = "3.2.0.0";
+    #tasty-discover = "5.0.0";
+    haskell-language-server = "1.8.0.0";
   };
-in {
-  haskellPackages =
-    pkgs.haskellPackages.override overrideHaskellPackages;
-  inherit pkgs;
-}
+})).extend (self: super: {
+  shells = super.shells // {
+    ghc = self.shell-driver {
+      exactDeps = false;
+      additional = p: with p; [ tasty-discover ];
+    };
+  };
+})
