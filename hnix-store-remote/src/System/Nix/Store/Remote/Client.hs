@@ -247,7 +247,11 @@ runStoreSocket preStoreConfig code = runMonadStore0 preStoreConfig $ do
       _daemonNixVersion <- sockGetS text
       return ()
 
-    -- when (daemonVersion >= ProtoVersion 1 35)
+    remoteTrustsUs <- if daemonVersion >= ProtoVersion 1 35
+      then do
+        sockGetS trustedFlag
+      else do
+        return Nothing
 
     processOutput_
     -- TODO should be min

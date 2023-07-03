@@ -29,6 +29,7 @@ module System.Nix.Store.Remote.Binary
   , text
   , maybeText
   -- *
+  , trustedFlag
   , protoVersion
   , field
   , errorInfo
@@ -269,6 +270,23 @@ digest :: forall a r. C.HashAlgorithm a => BaseEncoding -> Serializer r (C.Diges
 digest base = mapIsoSerializer coerce coerce $
   mapPrismSerializer (decodeDigestWith @a base) (encodeDigestWith base) $
   text
+
+data TrustedFlag = Trusted | NotTrusted
+
+trustedFlag :: Serializer r (Maybe TrustedFlag)
+trustedFlag = Serializer
+  { get = do
+      n <- get int
+      case n of
+        0 -> return $ Nothing
+        1 -> return $ Just Trusted
+        2 -> return $ Just NotTrusted
+        _ -> fail "Invalid trusted status from remote"
+  , put = \case
+      Nothing -> put int 0
+      Just Trusted -> put int 1
+      Just NotTrusted -> put int 2
+  }
 
 path :: HasStoreDir r => Serializer r StorePath
 path = Serializer

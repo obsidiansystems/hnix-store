@@ -40,11 +40,6 @@ data ValidPathInfo = ValidPathInfo
     contentAddressableAddress :: !(Maybe ContentAddressableAddress)
   }
 
-
-data StorePathTrust
-  = Trusted
-  | NotTrusted
-  
 -- | Where was this path gotten
 data Ultimate
   = -- | It was built locally and thus ultimately trusted
