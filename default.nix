@@ -16,7 +16,7 @@
     ghc = self.shell-driver {
       exactDeps = false;
       additional = p: with p; [ tasty-discover ];
-      buildInputs = [ nix.packages.x86_64-linux.default super.pkgs.ghcid ];
+      buildInputs = [ super.pkgs.ghcid ];
     };
   };
 })

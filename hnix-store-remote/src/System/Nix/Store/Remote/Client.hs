@@ -17,21 +17,17 @@ where
 
 import           Prelude                       hiding ( bool, put, get )
 
-import qualified Data.Binary.Get as B
+import Control.Monad.Catch
+
 import qualified Data.Binary.Put as B
 import qualified Data.ByteString
-import qualified Data.HashSet as HashSet
 import           Data.Some
 
-import           Network.Socket.ByteString      ( recv
-                                                , sendAll
+import           Network.Socket.ByteString      ( sendAll
                                                 )
 
 import           System.Nix.Hash                ( HashAlgo(..)
-                                                , BaseEncoding(NixBase32)
                                                 )
-import           System.Nix.Internal.Base       ( encodeWith )
-import qualified System.Nix.StorePath
 import           System.Nix.StorePath           ( StorePath
                                                 , StorePathSet
                                                 , StorePathName(..)
@@ -40,6 +36,7 @@ import           System.Nix.Store.Remote.Binary as RB
 import           System.Nix.Store.Remote.Logger
 import           System.Nix.Store.Remote.MonadStore
 import           System.Nix.Store.Remote.Socket
+import           System.Nix.Store.Remote.Server (WorkerException(..))
 import           System.Nix.Store.Remote.GADT as R
 import qualified System.Nix.Store.Remote.Protocol as P
 import           System.Nix.Store.Remote.Protocol hiding ( protoVersion )
@@ -228,23 +225,33 @@ runStoreSocket preStoreConfig code = runMonadStore0 preStoreConfig $ do
   greet = do
     sockPut $ put int workerMagic1
     soc      <- asks storeSocket
-    vermagic <- liftIO $ recv soc 16
-    let
-      (magic2, daemonProtoVersion) =
-        flip B.runGet (fromStrict vermagic)
-          $ (`runReaderT` ())
-          $ (,)
-            <$> (get int :: Get () Int32)
-            <*> get protoVersion
-    unless (magic2 == workerMagic2) $ error "Worker magic 2 mismatch"
 
-    sockPut $ put protoVersion ourProtoVersion -- clientVersion
-    sockPut $ put int (0 :: Int)   -- affinity
-    sockPut $ put int (0 :: Int)   -- obsolete reserveSpace
+    magic <- sockGetS int
+    daemonVersion <- sockGetS protoVersion
+
+    unless (magic == workerMagic2) $ error "Worker magic 2 mismatch"
+
+    when (daemonVersion < ProtoVersion 1 10) $
+      throwM WorkerException_ClientVersionTooOld
+
+    sockPutS protoVersion ourProtoVersion -- clientVersion
+
+    when (daemonVersion >= ProtoVersion 1 14) $
+      sockPutS int (0 :: Int)   -- affinity, obsolete
+
+    when (daemonVersion >= ProtoVersion 1 11) $
+      sockPutS bool False   -- obsolete reserveSpace
+
+    when (daemonVersion >= ProtoVersion 1 33) $ do
+      -- If we were buffering I/O, we would flush the output here.
+      _daemonNixVersion <- sockGetS text
+      return ()
+
+    -- when (daemonVersion >= ProtoVersion 1 35)
 
     processOutput_
     -- TODO should be min
-    pure daemonProtoVersion
+    pure daemonVersion
 
 type Run a = IO (Either String a, [Logger])
 

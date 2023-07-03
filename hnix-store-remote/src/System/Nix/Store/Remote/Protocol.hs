@@ -13,7 +13,7 @@ workerMagic2 = 0x6478696f
 ourProtoVersion :: ProtoVersion
 ourProtoVersion = ProtoVersion
   { protoVersion_major = 1
-  , protoVersion_minor = 21
+  , protoVersion_minor = 35
   }
 
 data ProtoVersion = ProtoVersion

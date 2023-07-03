@@ -48,6 +48,9 @@ sockTryGet g = do
     soc <- asks storeSocket
     liftIO $ Just <$> recv soc 8
 
+sockGetS :: (MonadIO m, MonadReader r m, HasStoreSocket r) => RB.Serializer r a -> m a
+sockGetS s = sockGet (RB.get s)
+
 sockGet :: (MonadReader r m, MonadIO m, HasStoreSocket r) => RB.Get r a -> m a
 sockGet = (either (liftIO . fail) pure) <=< sockTryGet
 
@@ -55,3 +58,6 @@ sockPut :: (MonadReader r m, MonadIO m, HasStoreSocket r) => RB.Put r -> m ()
 sockPut p = do
   r <- ask
   liftIO $ sendAll (storeSocket r) $ toStrict $ B.runPut $ runReaderT p r
+
+sockPutS :: (MonadIO m, MonadReader r m, HasStoreSocket r) => RB.Serializer r a -> a -> m ()
+sockPutS s x = sockPut (RB.put s x)
