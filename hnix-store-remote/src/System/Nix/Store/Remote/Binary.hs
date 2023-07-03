@@ -276,16 +276,16 @@ data TrustedFlag = Trusted | NotTrusted
 trustedFlag :: Serializer r (Maybe TrustedFlag)
 trustedFlag = Serializer
   { get = do
-      n <- get int
+      n :: Word8 <- get int
       case n of
         0 -> return $ Nothing
         1 -> return $ Just Trusted
         2 -> return $ Just NotTrusted
-        _ -> fail "Invalid trusted status from remote"
-  , put = \case
-      Nothing -> put int 0
-      Just Trusted -> put int 1
-      Just NotTrusted -> put int 2
+        _ -> fail $ "Invalid trusted status from remote: " <> show n
+  , put = \n -> put int $ case n of
+      Nothing -> 0 :: Word8
+      Just Trusted -> 1
+      Just NotTrusted -> 2
   }
 
 path :: HasStoreDir r => Serializer r StorePath
@@ -382,7 +382,7 @@ pathMetadata = Serializer
   { get = do
       deriverPath <- get maybePath
 
-      narHash <- get $ digest NixBase32
+      narHash <- get $ digest Base16
       references       <- get $ hashSet path
       registrationTime <- get time
       narBytes         <- (\case
@@ -392,7 +392,7 @@ pathMetadata = Serializer
 
       _sigStrings      <- (fmap . fmap) bsToText $ get $ list byteStringLen
       caString         <- get byteStringLen
-      
+
 
       let
           -- XXX: signatures need pubkey from config
@@ -413,7 +413,7 @@ pathMetadata = Serializer
       put (hashSet path) $ references x
       put (time) $ registrationTime x
       put (int) $ Prelude.maybe 0 id $ narBytes x
-      put ultimate_ $ ultimate x 
+      put ultimate_ $ ultimate x
 
       put (hashSet text) $ Data.HashSet.empty
   }

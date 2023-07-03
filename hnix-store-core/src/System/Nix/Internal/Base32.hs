@@ -8,7 +8,7 @@ where
 
 import qualified Data.ByteString               as Bytes
 import qualified Data.ByteString.Char8         as Bytes.Char8
-import qualified Data.Text
+import qualified Data.Text as T
 import           Data.Vector                    ( Vector )
 import qualified Data.Vector                   as Vector
 import           Data.Bits                      ( shiftR )
@@ -53,9 +53,9 @@ encode c = toText $ takeCharPosFromDict <$> [nChar - 1, nChar - 2 .. 0]
 decode :: Text -> Either String ByteString
 decode what =
   bool
-    (Left "Invalid NixBase32 string")
+    (Left $ "Invalid NixBase32 string: " <> T.unpack what)
     (unsafeDecode what)
-    (Data.Text.all (`elem` digits32) what)
+    (T.all (`elem` digits32) what)
 
 -- | Decode Nix's base32 encoded text
 -- Doesn't check if all elements match `digits32`
@@ -79,7 +79,7 @@ unsafeDecode what =
    where
     bstr = Bytes.Char8.pack $ take (decLen - Bytes.length x) (cycle "\NUL")
 
-  decLen = Data.Text.length what * 5 `div` 8
+  decLen = T.length what * 5 `div` 8
 
 -- | Encode an Integer to a bytestring
 -- Similar to Data.Base32String (integerToBS) without `reverse`

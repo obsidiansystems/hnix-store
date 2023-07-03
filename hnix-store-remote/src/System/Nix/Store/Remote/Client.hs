@@ -206,11 +206,11 @@ doReq = \case
 -- For convenience:
 
 sockGetPath :: MonadStore StorePath
-sockGetPath = sockGet $ get path
+sockGetPath = sockGetS path
 
 sockGetPaths :: MonadStore StorePathSet
 sockGetPaths = do
-  sockGet $ get $ hashSet path
+  sockGetS $ hashSet path
 
 -- entry point
 

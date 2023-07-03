@@ -69,7 +69,7 @@ processOutput = do
           Nothing   -> throwError "No data to read provided"
           Just part -> do
             -- XXX: we should check/assert part size against n of (Read n)
-            sockPut $ put lazyByteStringLen part
+            sockPutS lazyByteStringLen part
             clearData
 
         processOutput
