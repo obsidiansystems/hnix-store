@@ -74,12 +74,14 @@ import           System.Nix.Store.Remote.TextConv
 --import qualified System.Nix.Store.Remote.Protocol as P
 import           System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
 import           Crypto.Hash                    ( SHA256 )
+import qualified Crypto.Hash as C
 
 import           Data.Bits
 import qualified Data.HashSet
 import qualified Data.Map.Lazy
 import qualified Data.Map.Strict
 import qualified Data.Set
+--import qualified Data.Binary.Builder as BSL
 
 type Get r = ReaderT r B.Get
 type PutM r = ReaderT r B.PutM
@@ -131,6 +133,12 @@ enum = mapIsoSerializer (toEnum) fromEnum int
 
 time :: Serializer r UTCTime
 time = mapPrismSerializer (Right . posixSecondsToUTCTime) utcTimeToPOSIXSeconds enum
+
+ultimate_ :: Serializer r Ultimate
+ultimate_ = mapIsoSerializer
+  (\case False -> BuiltElsewhere; True -> BuiltLocally)
+  (\case BuiltElsewhere -> False; BuiltLocally -> True)
+  bool
 
 maybe :: Serializer r a -> Serializer r (Maybe a)
 maybe a = Serializer
@@ -257,6 +265,11 @@ storePathHashPart = mapIsoSerializer coerce coerce $
   mapPrismSerializer (decodeWith NixBase32) (encodeWith NixBase32) $
   text
 
+digest :: forall a r. C.HashAlgorithm a => BaseEncoding -> Serializer r (C.Digest a)
+digest base = mapIsoSerializer coerce coerce $
+  mapPrismSerializer (decodeDigestWith @a base) (encodeDigestWith base) $
+  text
+
 path :: HasStoreDir r => Serializer r StorePath
 path = Serializer
   { get = do
@@ -351,22 +364,17 @@ pathMetadata = Serializer
   { get = do
       deriverPath <- get maybePath
 
-      narHashText <- decodeUtf8 <$> get byteStringLen
-      let
-        narHash =
-          case
-            decodeDigestWith @SHA256 NixBase32 narHashText
-            of
-            Left  e -> error $ fromString e
-            Right x -> SomeDigest x
-
+      narHash <- get $ digest NixBase32
       references       <- get $ hashSet path
       registrationTime <- get time
-      narBytes         <- Just <$> get int
-      ultimate         <- get bool
+      narBytes         <- (\case
+                              0 -> Nothing
+                              size -> Just size) <$> get int
+      ultimate         <- get ultimate_
 
       _sigStrings      <- (fmap . fmap) bsToText $ get $ list byteStringLen
       caString         <- get byteStringLen
+      
 
       let
           -- XXX: signatures need pubkey from config
@@ -379,10 +387,17 @@ pathMetadata = Serializer
               Left  e -> error $ fromString e
               Right x -> Just x
 
-          trust = if ultimate then BuiltLocally else BuiltElsewhere
 
       pure $ StorePathMetadata{..}
-  , put = undefined -- TODO
+  , put = \x -> do
+      put maybePath $ deriverPath x
+      put (digest NixBase32) $ narHash x
+      put (hashSet path) $ references x
+      put (time) $ registrationTime x
+      put (int) $ Prelude.maybe 0 id $ narBytes x
+      put ultimate_ $ ultimate x 
+
+      put (hashSet text) $ Data.HashSet.empty
   }
 
 {-
