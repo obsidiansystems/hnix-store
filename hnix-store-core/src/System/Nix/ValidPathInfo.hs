@@ -1,7 +1,7 @@
 {-|
 Description : Metadata about Nix store paths.
 -}
-module System.Nix.StorePathMetadata where
+module System.Nix.ValidPathInfo where
 
 import           System.Nix.StorePath           ( StorePath
                                                 , StorePathSet
@@ -13,7 +13,7 @@ import System.Nix.Internal.Signature ( NarSignature )
 import qualified Crypto.Hash as C
 
 -- | Metadata about a 'StorePath'
-data StorePathMetadata = StorePathMetadata
+data ValidPathInfo = ValidPathInfo
   { -- | The path to the derivation file that built this path, if any
     -- and known.
     deriverPath :: !(Maybe StorePath)

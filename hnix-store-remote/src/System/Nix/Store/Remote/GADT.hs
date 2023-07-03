@@ -29,7 +29,7 @@ import           System.Nix.StorePath           ( StorePath
                                                 , StorePathSet
                                                 , StorePathHashPart
                                                 )
-import           System.Nix.StorePathMetadata  ( StorePathMetadata )
+import           System.Nix.ValidPathInfo  ( ValidPathInfo )
 
 import           System.Nix.Nar                 ( NarSource )
 
@@ -115,7 +115,7 @@ data StoreRequest :: Type -> Type where
 
   QueryPathInfo
     :: StorePath
-    -> StoreRequest (Maybe StorePathMetadata)
+    -> StoreRequest (Maybe ValidPathInfo)
 
   QueryReferrers
     :: StorePath

@@ -46,7 +46,7 @@ library
     , System.Nix.ReadonlyStore
     , System.Nix.Signature
     , System.Nix.StorePath
-    , System.Nix.StorePathMetadata
+    , System.Nix.ValidPathInfo
   build-depends:
       base >=4.12 && <5
     , relude >= 1.0

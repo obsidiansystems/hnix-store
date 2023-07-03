@@ -67,7 +67,7 @@ import           System.Nix.StorePath           hiding ( storePathName )
 import           System.Nix.Hash                ( SomeNamedDigest(..)
                                                 , BaseEncoding(NixBase32)
                                                 )
-import           System.Nix.StorePathMetadata
+import           System.Nix.ValidPathInfo
 import qualified System.Nix.Store.Remote.Parsers
 import           System.Nix.Store.Remote.TextConv
 --import           System.Nix.Store.Remote.GADT as R
@@ -359,7 +359,7 @@ buildResult = Serializer
       put time f
   }
 
-pathMetadata :: HasStoreDir r => Serializer r StorePathMetadata
+pathMetadata :: HasStoreDir r => Serializer r ValidPathInfo
 pathMetadata = Serializer
   { get = do
       deriverPath <- get maybePath
@@ -388,7 +388,7 @@ pathMetadata = Serializer
               Right x -> Just x
 
 
-      pure $ StorePathMetadata{..}
+      pure $ ValidPathInfo{..}
   , put = \x -> do
       put maybePath $ deriverPath x
       put (digest NixBase32) $ narHash x

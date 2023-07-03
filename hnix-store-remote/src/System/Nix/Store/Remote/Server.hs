@@ -22,7 +22,7 @@ import           System.Nix.StorePath ( StoreDir
                                       , StorePath
                                       , StorePathName(..)
                                       )
-import           System.Nix.StorePathMetadata
+import           System.Nix.ValidPathInfo
 
 import           System.Nix.Nar                 ( NarSource )
 
