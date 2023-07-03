@@ -4,11 +4,11 @@
 }: (reflex-platform.project ({ pkgs, thunkSource, ... }: {
   name = "hnix-store";
   src = ./.;
-#  compiler-nix-name = "ghc8107";
+  compiler-nix-name = "ghc8107";
   shells = p: with p; [ hnix-store-core hnix-store-remote ];
   shellTools = {
     cabal-install = "3.2.0.0";
-#    haskell-language-server = "1.8.0.0";
+    haskell-language-server = "1.8.0.0";
   };
 })).extend (self: super: {
   inherit nix;
