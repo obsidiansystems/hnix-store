@@ -7,24 +7,25 @@ pkgs=(
 )
 
 extensions=(
-    -XHaskell2010
-    -XOverloadedStrings
-    -XDeriveGeneric
+    -XBangPatterns
     -XDeriveDataTypeable
-    -XDeriveFunctor
     -XDeriveFoldable
-    -XDeriveTraversable
+    -XDeriveFunctor
+    -XDeriveGeneric
     -XDeriveLift
+    -XDeriveTraversable
     -XFlexibleContexts
     -XFlexibleInstances
+    -XHaskell2010
+    -XImportQualifiedPost
+    -XInstanceSigs
+    -XLambdaCase
+    -XMultiParamTypeClasses
+    -XOverloadedStrings
     -XStandaloneDeriving
+    -XTupleSections
     -XTypeApplications
     -XTypeSynonymInstances
-    -XInstanceSigs
-    -XMultiParamTypeClasses
-    -XTupleSections
-    -XLambdaCase
-    -XBangPatterns
     -XViewPatterns
 )
 

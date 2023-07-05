@@ -4,43 +4,36 @@
 {-# language DataKinds           #-}
 
 module System.Nix.Store.Remote.Parsers
-  ( parseContentAddressableAddress
+  ( parseContentAddress
   )
 where
 
-import           Data.Attoparsec.ByteString.Char8
-import           System.Nix.Hash
-import           System.Nix.StorePath           ( ContentAddressableAddress(..)
-                                                , NarHashMode(..)
-                                                )
-import           Crypto.Hash                    ( SHA256 )
+import Data.Dependent.Sum
+import Data.Attoparsec.ByteString.Char8
+import System.Nix.Hash
+import Crypto.Hash
 
 -- | Parse `ContentAddressableAddress` from `ByteString`
-parseContentAddressableAddress
-  :: ByteString -> Either String ContentAddressableAddress
-parseContentAddressableAddress =
-  Data.Attoparsec.ByteString.Char8.parseOnly contentAddressableAddressParser
+parseContentAddress
+  :: ByteString -> Either String ContentAddress
+parseContentAddress =
+  Data.Attoparsec.ByteString.Char8.parseOnly contentAddressParser
 
 -- | Parser for content addressable field
-contentAddressableAddressParser :: Parser ContentAddressableAddress
-contentAddressableAddressParser = caText <|> caFixed
+contentAddressParser :: Parser ContentAddress
+contentAddressParser = do
+  method <- parseContentAddressMethod
+  digest <- parseTypedDigest
+  case digest of
+    Left e -> fail e
+    Right x -> return $ ContentAddress method x
 
--- | Parser for @text:sha256:<h>@
-caText :: Parser ContentAddressableAddress
-caText = do
-  _      <- "text:sha256:"
-  digest <- decodeDigestWith @SHA256 NixBase32 <$> parseHash
-  either fail pure $ Text <$> digest
+parseContentAddressMethod :: Parser ContentAddressMethod
+parseContentAddressMethod =
+      TextIngestionMethod <$ "text:"
+  <|> FileIngestionMethod <$ "fixed:" <*> (FileRecursive <$ "r:" <|> pure Flat)
 
--- | Parser for @fixed:<r?>:<ht>:<h>@
-caFixed :: Parser ContentAddressableAddress
-caFixed = do
-  _           <- "fixed:"
-  narHashMode <- (Recursive <$ "r:") <|> (RegularFile <$ "")
-  digest      <- parseTypedDigest
-  either fail pure $ Fixed narHashMode <$> digest
-
-parseTypedDigest :: Parser (Either String SomeNamedDigest)
+parseTypedDigest :: Parser (Either String (DSum HashAlgo Digest))
 parseTypedDigest = mkNamedDigest <$> parseHashType <*> parseHash
 
 parseHashType :: Parser Text

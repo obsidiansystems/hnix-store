@@ -50,32 +50,25 @@ module System.Nix.Store.Remote.Binary
 import qualified Prelude
 import Prelude                 hiding (bool, map, maybe, put, get, putText, putBS)
 
---import qualified Data.Binary.Builder as BSL
---import qualified System.Nix.Store.Remote.Protocol as P
---import System.Nix.Store.Remote.GADT as R
-import Crypto.Hash ( SHA256 )
-import qualified Crypto.Hash as C
+import Crypto.Hash qualified as C
+import Data.Binary.Get qualified as B
+import Data.Binary.Put qualified as B
 import Data.Bits
-import qualified Data.Binary.Get               as B
-import qualified Data.Binary.Put               as B
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy          as BSL
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BSL
 import Data.Constraint.Extras
 import Data.Dependent.Sum
-import qualified Data.HashSet
-import qualified Data.Map.Lazy
-import qualified Data.Map.Strict
-import qualified Data.Set
+import Data.HashSet qualified
+import Data.Map.Lazy qualified
+import Data.Map.Strict qualified
+import Data.Set qualified
 import Data.Some
 import Data.Time
 import Data.Time.Clock.POSIX
 import Nix.Derivation hiding (path)
 import System.Nix.Build
 import System.Nix.Hash
-import System.Nix.Hash ( SomeNamedDigest(..), BaseEncoding(NixBase32) )
-import System.Nix.Internal.Base ( decodeWith, encodeWith )
-import System.Nix.Internal.ContentAddressed
-import qualified System.Nix.Store.Remote.Parsers
+--import System.Nix.Internal.Hash
 import System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
 import System.Nix.Store.Remote.TextConv
 import System.Nix.StorePath hiding ( storePathName )
@@ -251,7 +244,7 @@ field = Serializer
 errorInfo :: Serializer r ErrorInfo
 errorInfo = undefined
 
-someHashAlgo :: Serializer r SomeHashAlgo
+someHashAlgo :: Serializer r (Some HashAlgo)
 someHashAlgo = mapPrismSerializer textToAlgo (foldSome algoToText) text
 
 -- TODO validate
@@ -437,8 +430,8 @@ fileIngestionMethodS = Serializer
       Flat -> pure ()
   }
 
-ingestionMethodS :: Serializer r IngestionMethod
-ingestionMethodS = Serializer
+contentAddressMethodS :: Serializer r ContentAddressMethod
+contentAddressMethodS = Serializer
   { get = (TextIngestionMethod <$ string "text:")
       <|> (FileIngestionMethod <$> (string "fixed:" *> get fileIngestionMethodS))
   , put = \case
@@ -446,8 +439,8 @@ ingestionMethodS = Serializer
     FileIngestionMethod s -> putBS "fixed:" >> put fileIngestionMethodS s
   }
 
-hashTypeS :: Serializer r (Some HashAlgo)
-hashTypeS = Serializer
+hashAlgoS :: Serializer r (Some HashAlgo)
+hashAlgoS = Serializer
   { get = Some HashAlgo_MD5 <$ string "md5"
       <|> Some HashAlgo_SHA1 <$ string "sha1"
       <|> Some HashAlgo_SHA256 <$ string "sha256"
@@ -459,28 +452,16 @@ hashTypeS = Serializer
       Some HashAlgo_SHA512 -> putBS "sha512"
   }
 
-contentAddressMethodS :: Serializer r (Some ContentAddressMethod)
-contentAddressMethodS = Serializer
-  { get = do
-      im <- get ingestionMethodS
-      Some ht <- get hashTypeS
-      return $ Some (ContentAddressMethod im ht)
-  , put = \(Some (ContentAddressMethod im ht)) ->
-      put ingestionMethodS im >> put hashTypeS (Some ht)
-  }
-
 contentAddressS :: Serializer r ContentAddress
 contentAddressS = Serializer
   { get = do
-      Some method <- get contentAddressMethodS
-      digest <- case method of
-        ContentAddressMethod _ algo -> case algo of
-          HashAlgo_MD5 -> get (digest NixBase32)
-          HashAlgo_SHA1 -> get (digest NixBase32)
-          HashAlgo_SHA256 -> get (digest NixBase32)
-          HashAlgo_SHA512 -> get (digest NixBase32)
-      return $ ContentAddress (method :=> digest)
-  , put = \(ContentAddress (method :=> d)) ->
-      has @(C.HashAlgorithm) method $
-        put contentAddressMethodS (Some method) >> put (digest NixBase32) d
+      method <- get contentAddressMethodS
+      Some algo <- get hashAlgoS
+      d <- has @(C.HashAlgorithm) algo $
+        get (digest NixBase32)
+      return $ ContentAddress method (algo :=> d)
+  , put = \(ContentAddress method (algo :=> d)) -> do
+      put contentAddressMethodS method
+      has @(C.HashAlgorithm) algo $
+        put hashAlgoS (Some algo) >> put (digest NixBase32) d
   }

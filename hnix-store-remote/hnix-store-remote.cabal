@@ -70,23 +70,24 @@ library
     , relude (Relude as Prelude)
     , relude
   default-extensions:
-      OverloadedStrings
-    , DeriveGeneric
+      BangPatterns
     , DeriveDataTypeable
-    , DeriveFunctor
     , DeriveFoldable
-    , DeriveTraversable
+    , DeriveFunctor
+    , DeriveGeneric
     , DeriveLift
+    , DeriveTraversable
     , FlexibleContexts
     , FlexibleInstances
+    , ImportQualifiedPost
+    , InstanceSigs
+    , LambdaCase
+    , MultiParamTypeClasses
+    , OverloadedStrings
     , StandaloneDeriving
+    , TupleSections
     , TypeApplications
     , TypeSynonymInstances
-    , InstanceSigs
-    , MultiParamTypeClasses
-    , TupleSections
-    , LambdaCase
-    , BangPatterns
     , ViewPatterns
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -135,22 +136,23 @@ test-suite hnix-store-remote-tests
     , relude (Relude as Prelude)
     , relude
   default-extensions:
-      OverloadedStrings
-    , DeriveGeneric
+      BangPatterns
     , DeriveDataTypeable
-    , DeriveFunctor
     , DeriveFoldable
-    , DeriveTraversable
+    , DeriveFunctor
+    , DeriveGeneric
     , DeriveLift
+    , DeriveTraversable
     , FlexibleContexts
     , FlexibleInstances
+    , ImportQualifiedPost
+    , InstanceSigs
+    , LambdaCase
+    , MultiParamTypeClasses
+    , OverloadedStrings
     , StandaloneDeriving
+    , TupleSections
     , TypeApplications
     , TypeSynonymInstances
-    , InstanceSigs
-    , MultiParamTypeClasses
-    , TupleSections
-    , LambdaCase
-    , BangPatterns
     , ViewPatterns
   default-language: Haskell2010

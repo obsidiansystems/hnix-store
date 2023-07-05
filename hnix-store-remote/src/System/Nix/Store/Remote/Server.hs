@@ -101,27 +101,30 @@ processConnection sd workerHelper sock = do
     sockPut $ put int workerMagic2
     sockPut $ put protoVersion ourProtoVersion
 
-    clientVersion@(ProtoVersion _ clientMinorVersion) <- sockGet $ get protoVersion
+    clientVersion <- sockGet $ get protoVersion
     liftIO $ print clientVersion
 
-    when (clientVersion < ProtoVersion 0x1 0x0a) $
+    when (clientVersion < ProtoVersion 1 10) $
         throwM WorkerException_ClientVersionTooOld
 
     tunnelLogger <- liftIO $ newTunnelLogger
 
-    when (clientMinorVersion >= 14) $ do
+    when (clientVersion >= ProtoVersion 1 14) $ do
       x :: Word32 <- sockGet $ get int
       when (x /= 0) $ do
         -- Obsolete CPU affinity.
         _ :: Word32 <- sockGet $ get int
         pure ()
 
-    when (clientMinorVersion >= 11) $ do
-        _ :: Word32 <- sockGet $ get int -- obsolete reserveSpace
-        pure ()
+    when (clientVersion >= ProtoVersion 1 11) $ do
+      _ :: Word32 <- sockGet $ get int -- obsolete reserveSpace
+      pure ()
 
-    when (clientMinorVersion >= 33) $ do
-        sockPut $ put text "nixVersion (smithy)"
+    when (clientVersion >= ProtoVersion 1 33) $ do
+      sockPut $ put text "nixVersion (smithy)"
+
+    when (clientVersion >= ProtoVersion 1 35) $ do
+      sockPutS trustedFlag Nothing
 
     -- Send startup error messages to the client.
     startWork tunnelLogger

@@ -15,23 +15,16 @@ module System.Nix.Store.Remote.GADT
   )
 where
 
-import           Prelude                 hiding ( bool, put, get )
-import qualified Data.ByteString.Lazy          as BSL
+import Prelude hiding (bool, put, get)
 
-import           Nix.Derivation                 ( Derivation )
-import           System.Nix.Build               ( BuildMode
-                                                , BuildResult
-                                                )
-import           System.Nix.Hash                ( SomeHashAlgo
-                                                )
-import           System.Nix.StorePath           ( StorePath
-                                                , StorePathName
-                                                , StorePathSet
-                                                , StorePathHashPart
-                                                )
-import           System.Nix.ValidPathInfo  ( ValidPathInfo )
-
-import           System.Nix.Nar                 ( NarSource )
+import Data.ByteString.Lazy qualified as BSL
+import Data.Some
+import Nix.Derivation (Derivation)
+import System.Nix.Build (BuildMode, BuildResult)
+import System.Nix.Hash (HashAlgo)
+import System.Nix.Nar (NarSource)
+import System.Nix.StorePath (StorePath, StorePathName, StorePathSet, StorePathHashPart)
+import System.Nix.ValidPathInfo (ValidPathInfo)
 
 type RepairFlag = Bool
 type CheckFlag = Bool
@@ -42,7 +35,7 @@ data StoreRequest :: Type -> Type where
   AddToStore
     :: StorePathName        -- ^ Name part of the newly created `StorePath`
     -> Bool                 -- ^ Add target directory recursively
-    -> SomeHashAlgo
+    -> Some HashAlgo
     -> (forall m. MonadIO m => NarSource m) -- ^ provide nar stream
     -> RepairFlag           -- ^ Only used by local store backend
     -> StoreRequest StorePath

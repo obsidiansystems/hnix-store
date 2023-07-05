@@ -3,15 +3,11 @@ Description : Metadata about Nix store paths.
 -}
 module System.Nix.ValidPathInfo where
 
-import           System.Nix.StorePath           ( StorePath
-                                                , StorePathSet
-                                                , ContentAddressableAddress
-                                                )
-import           System.Nix.Hash                ( SomeNamedDigest )
-import           Data.Time                      ( UTCTime )
-import System.Nix.Internal.Signature ( NarSignature )
-import qualified Crypto.Hash as C
-import System.Nix.Internal.ContentAddressed
+import Crypto.Hash qualified as C
+import Data.Time (UTCTime)
+import System.Nix.ContentAddress
+import System.Nix.Internal.Signature (NarSignature)
+import System.Nix.StorePath (StorePath, StorePathSet)
 
 -- | Metadata about a 'StorePath'
 data ValidPathInfo = ValidPathInfo
@@ -38,7 +34,7 @@ data ValidPathInfo = ValidPathInfo
     --
     -- There is no guarantee from this type alone that this address
     -- is actually correct for this store path.
-    contentAddressableAddress :: !(Maybe ContentAddress)
+    contentAddress :: !(Maybe ContentAddress)
   }
 
 -- | Where was this path gotten
