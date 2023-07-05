@@ -48,7 +48,9 @@ library
     , attoparsec
     , binary
     , bytestring
+    , constraints-extras
     , containers
+    , dependent-sum
     , monad-control
     , concurrency
     , cryptonite

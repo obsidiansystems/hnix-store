@@ -2,13 +2,15 @@
 Description : Cryptographic hashing interface for hnix-store, on top
               of the cryptohash family of libraries.
 -}
-{-# language AllowAmbiguousTypes #-}
-{-# language GADTs               #-}
-{-# language TypeFamilies        #-}
-{-# language ScopedTypeVariables #-}
-{-# language DataKinds           #-}
-{-# language ExistentialQuantification #-}
-{-# language CPP #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module System.Nix.Internal.Hash
   ( NamedAlgo(..)
@@ -32,6 +34,7 @@ import qualified Data.Text              as T
 import           System.Nix.Internal.Base
 import           Data.ByteArray
 import           System.Nix.Internal.Truncation
+import Data.Constraint.Extras.TH
 
 -- | A 'HashAlgorithm' with a canonical name, for serialization
 -- purposes (e.g. SRI hashes)
@@ -125,3 +128,5 @@ decodeDigestWith b x =
         maybeToRight
           ("Cryptonite was not able to convert '(ByteString -> Digest a)' for: '" <> show bs <>"'.")
     (toEither . C.digestFromByteString) bs
+
+deriveArgDict ''HashAlgo

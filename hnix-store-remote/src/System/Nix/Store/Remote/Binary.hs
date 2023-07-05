@@ -48,41 +48,38 @@ module System.Nix.Store.Remote.Binary
   ) where
 
 import qualified Prelude
-import           Prelude                 hiding (bool, map, maybe, put, get, putText )
+import Prelude                 hiding (bool, map, maybe, put, get, putText, putBS)
 
+--import qualified Data.Binary.Builder as BSL
+--import qualified System.Nix.Store.Remote.Protocol as P
+--import System.Nix.Store.Remote.GADT as R
+import Crypto.Hash ( SHA256 )
+import qualified Crypto.Hash as C
+import Data.Bits
 import qualified Data.Binary.Get               as B
 import qualified Data.Binary.Put               as B
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy          as BSL
-import           Data.Some
-import           Data.Time
-import           Data.Time.Clock.POSIX
-
-import           Nix.Derivation hiding (path)
-
-import           System.Nix.Internal.Base       ( decodeWith
-                                                , encodeWith
-                                                )
-import           System.Nix.Build
-import           System.Nix.Hash
-import           System.Nix.StorePath           hiding ( storePathName )
-import           System.Nix.Hash                ( SomeNamedDigest(..)
-                                                , BaseEncoding(NixBase32)
-                                                )
-import           System.Nix.ValidPathInfo
-import qualified System.Nix.Store.Remote.Parsers
-import           System.Nix.Store.Remote.TextConv
---import           System.Nix.Store.Remote.GADT as R
---import qualified System.Nix.Store.Remote.Protocol as P
-import           System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
-import           Crypto.Hash                    ( SHA256 )
-import qualified Crypto.Hash as C
-
-import           Data.Bits
+import Data.Constraint.Extras
+import Data.Dependent.Sum
 import qualified Data.HashSet
 import qualified Data.Map.Lazy
 import qualified Data.Map.Strict
 import qualified Data.Set
---import qualified Data.Binary.Builder as BSL
+import Data.Some
+import Data.Time
+import Data.Time.Clock.POSIX
+import Nix.Derivation hiding (path)
+import System.Nix.Build
+import System.Nix.Hash
+import System.Nix.Hash ( SomeNamedDigest(..), BaseEncoding(NixBase32) )
+import System.Nix.Internal.Base ( decodeWith, encodeWith )
+import System.Nix.Internal.ContentAddressed
+import qualified System.Nix.Store.Remote.Parsers
+import System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
+import System.Nix.Store.Remote.TextConv
+import System.Nix.StorePath hiding ( storePathName )
+import System.Nix.ValidPathInfo
 
 type Get r = ReaderT r B.Get
 type PutM r = ReaderT r B.PutM
@@ -383,39 +380,31 @@ pathMetadata = Serializer
       deriverPath <- get maybePath
 
       narHash <- get $ digest Base16
-      references       <- get $ hashSet path
+      references <- get $ hashSet path
       registrationTime <- get time
-      narBytes         <- (\case
-                              0 -> Nothing
-                              size -> Just size) <$> get int
-      ultimate         <- get ultimate_
+      narBytes <- (\case
+                      0 -> Nothing
+                      size -> Just size) <$> get int
+      ultimate <- get ultimate_
 
-      _sigStrings      <- (fmap . fmap) bsToText $ get $ list byteStringLen
-      caString         <- get byteStringLen
-
+      _sigStrings <- (fmap . fmap) bsToText $ get $ list byteStringLen
+      contentAddressableAddress <- Just <$> get contentAddressS <|> pure Nothing
 
       let
           -- XXX: signatures need pubkey from config
           sigs = Data.Set.empty
-
-          contentAddressableAddress =
-            case
-              System.Nix.Store.Remote.Parsers.parseContentAddressableAddress caString
-              of
-              Left  e -> error $ fromString e
-              Right x -> Just x
-
-
       pure $ ValidPathInfo{..}
   , put = \x -> do
       put maybePath $ deriverPath x
       put (digest NixBase32) $ narHash x
       put (hashSet path) $ references x
-      put (time) $ registrationTime x
-      put (int) $ Prelude.maybe 0 id $ narBytes x
+      put time $ registrationTime x
+      put int $ Prelude.maybe 0 id $ narBytes x
       put ultimate_ $ ultimate x
-
       put (hashSet text) $ Data.HashSet.empty
+      case contentAddressableAddress x of
+        Nothing -> pure ()
+        Just ca -> put contentAddressS ca
   }
 
 {-
@@ -430,3 +419,68 @@ storeRequest = Serializer
         put text $ System.Nix.Hash.algoName @a
   }
 -}
+
+string :: ByteString -> Get r ByteString
+string x = lift $ do
+  s <- B.getByteString (BS.length x)
+  guard (s == x)
+  return s
+
+putBS :: ByteString -> Put r
+putBS s = lift (B.putByteString s)
+
+fileIngestionMethodS :: Serializer r FileIngestionMethod
+fileIngestionMethodS = Serializer
+  { get = (FileRecursive <$ string "r:") <|> pure Flat
+  , put = \case
+      FileRecursive -> putBS "r:"
+      Flat -> pure ()
+  }
+
+ingestionMethodS :: Serializer r IngestionMethod
+ingestionMethodS = Serializer
+  { get = (TextIngestionMethod <$ string "text:")
+      <|> (FileIngestionMethod <$> (string "fixed:" *> get fileIngestionMethodS))
+  , put = \case
+    TextIngestionMethod -> putBS "text:"
+    FileIngestionMethod s -> putBS "fixed:" >> put fileIngestionMethodS s
+  }
+
+hashTypeS :: Serializer r (Some HashAlgo)
+hashTypeS = Serializer
+  { get = Some HashAlgo_MD5 <$ string "md5"
+      <|> Some HashAlgo_SHA1 <$ string "sha1"
+      <|> Some HashAlgo_SHA256 <$ string "sha256"
+      <|> Some HashAlgo_SHA512 <$ string "sha512"
+  , put = \case
+      Some HashAlgo_MD5 -> putBS "md5"
+      Some HashAlgo_SHA1 -> putBS "sha1"
+      Some HashAlgo_SHA256 -> putBS "sha256"
+      Some HashAlgo_SHA512 -> putBS "sha512"
+  }
+
+contentAddressMethodS :: Serializer r (Some ContentAddressMethod)
+contentAddressMethodS = Serializer
+  { get = do
+      im <- get ingestionMethodS
+      Some ht <- get hashTypeS
+      return $ Some (ContentAddressMethod im ht)
+  , put = \(Some (ContentAddressMethod im ht)) ->
+      put ingestionMethodS im >> put hashTypeS (Some ht)
+  }
+
+contentAddressS :: Serializer r ContentAddress
+contentAddressS = Serializer
+  { get = do
+      Some method <- get contentAddressMethodS
+      digest <- case method of
+        ContentAddressMethod _ algo -> case algo of
+          HashAlgo_MD5 -> get (digest NixBase32)
+          HashAlgo_SHA1 -> get (digest NixBase32)
+          HashAlgo_SHA256 -> get (digest NixBase32)
+          HashAlgo_SHA512 -> get (digest NixBase32)
+      return $ ContentAddress (method :=> digest)
+  , put = \(ContentAddress (method :=> d)) ->
+      has @(C.HashAlgorithm) method $
+        put contentAddressMethodS (Some method) >> put (digest NixBase32) d
+  }
