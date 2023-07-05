@@ -223,13 +223,12 @@ runStoreSocket preStoreConfig code = runMonadStore0 preStoreConfig $ do
  where
   greet :: MonadStore0 PreStoreConfig ProtoVersion
   greet = do
+    soc <- asks storeSocket
     sockPut $ put int workerMagic1
-    soc      <- asks storeSocket
 
     magic <- sockGetS int
-    daemonVersion <- sockGetS protoVersion
-
     unless (magic == workerMagic2) $ error "Worker magic 2 mismatch"
+    daemonVersion <- sockGetS protoVersion
 
     when (daemonVersion < ProtoVersion 1 10) $
       throwM WorkerException_ClientVersionTooOld
