@@ -1,7 +1,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language DataKinds           #-}
 
-module System.Nix.Internal.Truncation
+module System.Nix.Truncation
   ( truncateInNixWay
   )
 where

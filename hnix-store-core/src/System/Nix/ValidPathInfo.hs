@@ -6,7 +6,7 @@ module System.Nix.ValidPathInfo where
 import Crypto.Hash qualified as C
 import Data.Time (UTCTime)
 import System.Nix.ContentAddress
-import System.Nix.Internal.Signature (NarSignature)
+import System.Nix.Signature (NarSignature)
 import System.Nix.StorePath (StorePath, StorePathSet)
 
 -- | Metadata about a 'StorePath'

@@ -1,6 +1,6 @@
 {-# language CPP #-}
 
-module System.Nix.Internal.Base
+module System.Nix.Base
   ( BaseEncoding(Base16,NixBase32,Base64)
   , encodeWith
   , decodeWith

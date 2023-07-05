@@ -38,9 +38,9 @@ import qualified Control.Concurrent                as Concurrent
 import qualified Data.ByteString                   as BS
 import qualified System.IO                         as IO
 
-import qualified System.Nix.Internal.Nar.Effects   as Nar
-import qualified System.Nix.Internal.Nar.Parser    as Nar
-import qualified System.Nix.Internal.Nar.Streamer  as Nar
+import qualified System.Nix.Nar.Effects   as Nar
+import qualified System.Nix.Nar.Parser    as Nar
+import qualified System.Nix.Nar.Streamer  as Nar
 
 
 -- For a description of the NAR format, see Eelco's thesis

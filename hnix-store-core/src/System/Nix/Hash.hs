@@ -28,7 +28,7 @@ module System.Nix.Hash
   )
 where
 
-import qualified System.Nix.Internal.Base as Base
+import qualified System.Nix.Base as Base
 
 import Crypto.Hash qualified as C
 import Data.ByteArray
@@ -38,8 +38,8 @@ import Data.Constraint.Extras.TH
 import Data.Dependent.Sum
 import Data.Some
 import Data.Text qualified as T
-import System.Nix.Internal.Base
-import System.Nix.Internal.Truncation
+import System.Nix.Base
+import System.Nix.Truncation
 
 -- | A 'HashAlgorithm' with a canonical name, for serialization
 -- purposes (e.g. SRI hashes)

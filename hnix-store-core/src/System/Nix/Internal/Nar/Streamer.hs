@@ -2,7 +2,7 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module System.Nix.Internal.Nar.Streamer
+module System.Nix.Nar.Streamer
   ( NarSource
   , dumpString
   , dumpPath
@@ -21,7 +21,7 @@ import qualified Data.Text.Encoding              as TE (encodeUtf8)
 import qualified System.Directory                as Directory
 import           System.FilePath                 ((</>))
 
-import qualified System.Nix.Internal.Nar.Effects as Nar
+import qualified System.Nix.Nar.Effects as Nar
 
 
 -- | NarSource

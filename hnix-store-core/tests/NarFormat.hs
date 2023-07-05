@@ -35,7 +35,7 @@ import qualified Test.Tasty.HUnit                 as HU
 import           Test.Tasty.QuickCheck
 import qualified Text.Printf                      as Printf
 
-import qualified System.Nix.Internal.Nar.Streamer as Nar
+import qualified System.Nix.Nar.Streamer as Nar
 import           System.Nix.Nar
 
 -- Without the import, `max_live_bytes` and `getRTSStats` are undefined on some setups.

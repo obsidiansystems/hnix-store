@@ -4,7 +4,7 @@
 {-# language ScopedTypeVariables        #-}
 {-# language TypeFamilies               #-}
 
-module System.Nix.Internal.Nar.Parser
+module System.Nix.Nar.Parser
   ( runParser
   , parseNar
   , testParser
@@ -33,7 +33,7 @@ import qualified System.Directory                as Directory
 import           System.FilePath                 as FilePath
 import qualified System.IO                       as IO
 
-import qualified System.Nix.Internal.Nar.Effects as Nar
+import qualified System.Nix.Nar.Effects as Nar
 
 
 -- | NarParser is a monad for parsing a Nar file as a byte stream

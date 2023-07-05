@@ -41,8 +41,8 @@ import Data.Char qualified as Char
 import Data.Text qualified as Text
 import Relude.Unsafe qualified as Unsafe
 import System.FilePath qualified as FilePath
-import System.Nix.Internal.Base
-import System.Nix.Internal.Base32 qualified as Nix.Base32
+import System.Nix.Base
+import System.Nix.Base32 qualified as Nix.Base32
 import System.Nix.Hash
 
 -- | A path in a Nix store.

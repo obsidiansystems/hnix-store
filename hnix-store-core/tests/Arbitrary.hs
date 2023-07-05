@@ -7,7 +7,7 @@ import qualified Data.ByteString.Char8         as BSC
 
 import           Test.Tasty.QuickCheck
 
-import           System.Nix.Internal.StorePath
+import           System.Nix.StorePath
 import           Crypto.Hash                        ( SHA256
                                                     , Digest
                                                     , hash
