@@ -4,3 +4,5 @@ dist-newstyle
 .direnv
 cabal.project.local~
 cabal.project.local
+TAGS
+tags
