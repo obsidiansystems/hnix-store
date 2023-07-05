@@ -31,11 +31,9 @@ library
   exposed-modules:
       System.Nix.Store.Remote
     , System.Nix.Store.Remote.Binary
-    , System.Nix.Store.Remote.Builders
     , System.Nix.Store.Remote.Protocol
     , System.Nix.Store.Remote.GADT
     , System.Nix.Store.Remote.Logger
-    , System.Nix.Store.Remote.Parsers
     , System.Nix.Store.Remote.Client
     , System.Nix.Store.Remote.Server
     , System.Nix.Store.Remote.MonadStore

@@ -67,8 +67,8 @@ import Data.Time
 import Data.Time.Clock.POSIX
 import Nix.Derivation hiding (path)
 import System.Nix.Build
+import System.Nix.ContentAddress
 import System.Nix.Hash
---import System.Nix.Internal.Hash
 import System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
 import System.Nix.Store.Remote.TextConv
 import System.Nix.StorePath hiding ( storePathName )
@@ -381,7 +381,7 @@ pathMetadata = Serializer
       ultimate <- get ultimate_
 
       _sigStrings <- (fmap . fmap) bsToText $ get $ list byteStringLen
-      contentAddressableAddress <- Just <$> get contentAddressS <|> pure Nothing
+      contentAddress <- Just <$> get contentAddressS <|> pure Nothing
 
       let
           -- XXX: signatures need pubkey from config
@@ -395,7 +395,7 @@ pathMetadata = Serializer
       put int $ Prelude.maybe 0 id $ narBytes x
       put ultimate_ $ ultimate x
       put (hashSet text) $ Data.HashSet.empty
-      case contentAddressableAddress x of
+      case contentAddress x of
         Nothing -> pure ()
         Just ca -> put contentAddressS ca
   }
