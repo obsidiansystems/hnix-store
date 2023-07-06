@@ -25,8 +25,8 @@ outputsSpecToText = \case
   OutputsSpec_All -> "*"
   OutputsSpec_Names ns -> T.intercalate "," (fmap unStorePathName (Set.toList ns))
 
-parsePathWithOutputs :: StoreDir -> Text -> Either String DerivedPath
-parsePathWithOutputs root p = case T.breakOn "!" p of
+parseDerivedPath :: StoreDir -> Text -> Either String DerivedPath
+parseDerivedPath root p = case T.breakOn "!" p of
   (s,r) -> if T.null r
     then DerivedPath_Opaque <$> parsePathText root s
     else DerivedPath_Built <$> parsePathText root s <*> parseOutputsSpec r

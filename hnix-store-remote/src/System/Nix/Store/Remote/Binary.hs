@@ -181,7 +181,7 @@ derivedPath = Serializer
       when (v < ProtoVersion 1 30) (fail "derivedPath not yet implemented for old versions")
       root <- asks storeDir
       p <- get text
-      case parsePathWithOutputs root p of
+      case parseDerivedPath root p of
         Left err -> fail err
         Right x -> return x
   , put = \d -> do
