@@ -29,8 +29,8 @@ Common commons
 library
   import: commons
   exposed-modules:
-      System.Nix.Base32
-    , System.Nix.Base
+      System.Nix.Base
+    , System.Nix.Base32
     , System.Nix.Build
     , System.Nix.ContentAddress
     , System.Nix.Derivation
