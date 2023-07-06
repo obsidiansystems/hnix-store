@@ -3,36 +3,32 @@
 
 module NixDaemon where
 
-import qualified System.Environment            as Env
-import           Control.Exception              ( bracket )
-import           Control.Concurrent             ( threadDelay )
-import qualified Data.ByteString.Char8         as BSC
-import qualified Data.HashSet                  as HS
-import           Data.Some
-import qualified Data.Map.Strict               as M
-import           System.Directory
-import           System.IO.Temp
-import qualified System.Process                as P
-import           System.Posix.User             as U
-import           System.Linux.Namespaces       as NS
-import           Test.Hspec                     ( Spec
-                                                , describe
-                                                , context
-                                                )
-import qualified Test.Hspec                    as Hspec
-import           Test.Hspec.Expectations.Lifted
-
-import           System.FilePath
-
-import           System.Nix.Build
-import           System.Nix.Hash                ( HashAlgo(HashAlgo_SHA256) )
-import           System.Nix.StorePath
-import           System.Nix.Store.Remote
-import           System.Nix.Store.Remote.Client
-import           System.Nix.Store.Remote.GADT
-
-import           Crypto.Hash                    ( SHA256 )
-import           System.Nix.Nar                 ( dumpPath )
+import Control.Concurrent (threadDelay)
+import Control.Exception (bracket)
+import Crypto.Hash (SHA256)
+import Data.ByteString.Char8 qualified as BSC
+import Data.HashSet qualified as HS
+import Data.Map.Strict qualified as M
+import Data.Set qualified as Set
+import Data.Some
+import System.Directory
+import System.Environment qualified as Env
+import System.FilePath
+import System.IO.Temp
+import System.Linux.Namespaces as NS
+import System.Nix.Build
+import System.Nix.DerivedPath
+import System.Nix.Hash (HashAlgo(HashAlgo_SHA256))
+import System.Nix.Nar (dumpPath)
+import System.Nix.Store.Remote
+import System.Nix.Store.Remote.Client
+import System.Nix.Store.Remote.GADT
+import System.Nix.StorePath
+import System.Posix.User as U
+import System.Process qualified as P
+import Test.Hspec (Spec, describe, context)
+import Test.Hspec qualified as Hspec
+import Test.Hspec.Expectations.Lifted
 
 createProcessEnv :: FilePath -> String -> [String] -> IO P.ProcessHandle
 createProcessEnv fp proc args = do
@@ -250,15 +246,15 @@ makeSpecProtocol f = Hspec.around f $
 
     context "buildPaths" $ do
       itRights "build Normal" $ withPath $ \path -> do
-        let pathSet = HS.fromList [path]
+        let pathSet = Set.fromList [DerivedPath_Opaque path]
         doReq $ BuildPaths pathSet Normal
 
       itRights "build Check" $ withPath $ \path -> do
-        let pathSet = HS.fromList [path]
+        let pathSet = Set.fromList [DerivedPath_Opaque path]
         doReq $ BuildPaths pathSet Check
 
       itLefts "build Repair" $ withPath $ \path -> do
-        let pathSet = HS.fromList [path]
+        let pathSet = Set.fromList [DerivedPath_Opaque path]
         doReq $ BuildPaths pathSet Repair
 
     context "roots" $ context "findRoots" $ do
@@ -272,7 +268,7 @@ makeSpecProtocol f = Hspec.around f $
 
     context "queryMissing" $
       itRights "queries" $ withPath $ \path -> do
-        let pathSet = HS.fromList [path]
+        let pathSet = Set.fromList [DerivedPath_Opaque path]
         doReq (QueryMissing pathSet) `shouldReturn` (HS.empty, HS.empty, HS.empty, 0, 0)
 
     context "addToStore" $

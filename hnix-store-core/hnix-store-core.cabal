@@ -31,10 +31,10 @@ library
   exposed-modules:
       System.Nix.Base32
     , System.Nix.Base
-    , System.Nix.Base32
     , System.Nix.Build
     , System.Nix.ContentAddress
     , System.Nix.Derivation
+    , System.Nix.DerivedPath
     , System.Nix.Hash
     , System.Nix.Nar
     , System.Nix.Nar.Effects

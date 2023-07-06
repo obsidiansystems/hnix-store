@@ -261,7 +261,7 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
 
     P.BuildPaths -> simpleOp' $sockGet $
       R.BuildPaths
-        <$> get (hashSet path)
+        <$> get (set derivedPath)
         <*> get enum
 
     P.EnsurePath -> simpleOp' $ sockGet $
@@ -353,6 +353,8 @@ performOp sd workerHelper sock protocolVersion tunnelLogger0 op = do
       R.AddSignatures
         <$> get path
         <*> get (list lazyByteStringLen)
+
+    --P.QueryMissing -> simpleOp' $
 
 ---
 

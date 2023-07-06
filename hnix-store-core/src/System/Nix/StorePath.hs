@@ -29,16 +29,18 @@ module System.Nix.StorePath
   , storePathToNarInfo
   , -- * Parsing 'StorePath's
     parsePath
+  , parsePathText
   , pathParser
   )
 where
 
 import Crypto.Hash (SHA256)
 import Data.Attoparsec.Text.Lazy (Parser, (<?>))
-import Data.Attoparsec.Text.Lazy qualified as Parser.Text.Lazy
-import Data.ByteString.Char8 qualified as Bytes.Char8
+import Data.Attoparsec.Text.Lazy qualified as P
+import Data.ByteString.Char8 qualified as BS8
 import Data.Char qualified as Char
-import Data.Text qualified as Text
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Relude.Unsafe qualified as Unsafe
 import System.FilePath qualified as FilePath
 import System.Nix.Base
@@ -108,16 +110,16 @@ makeStorePathName n =
 reasonInvalid :: Text -> String
 reasonInvalid n
   | n == ""          = "Empty name"
-  | Text.length n > 211 = "Path too long"
-  | Text.head n == '.'  = "Leading dot"
+  | T.length n > 211 = "Path too long"
+  | T.head n == '.'  = "Leading dot"
   | otherwise        = "Invalid character"
 
 validStorePathName :: Text -> Bool
 validStorePathName n =
   n /= ""
-  && Text.length n <= 211
-  && Text.head n /= '.'
-  && Text.all validStorePathNameChar n
+  && T.length n <= 211
+  && T.head n /= '.'
+  && T.all validStorePathNameChar n
 
 validStorePathNameChar :: Char -> Bool
 validStorePathNameChar c =
@@ -156,65 +158,54 @@ storePathToRawFilePath sDir StorePath{..} =
 
 -- | Render a 'StorePath' as a 'FilePath'.
 storePathToFilePath :: StoreDir -> StorePath -> FilePath
-storePathToFilePath sDir = Bytes.Char8.unpack . storePathToRawFilePath sDir
+storePathToFilePath sDir = BS8.unpack . storePathToRawFilePath sDir
 
 -- | Render a 'StorePath' as a 'Text'.
 storePathToText :: StoreDir -> StorePath -> Text
-storePathToText sDir = toText . Bytes.Char8.unpack . storePathToRawFilePath sDir
+storePathToText sDir = toText . BS8.unpack . storePathToRawFilePath sDir
 
 -- | Build `narinfo` suffix from `StorePath` which
 -- can be used to query binary caches.
-storePathToNarInfo :: StorePath -> Bytes.Char8.ByteString
+storePathToNarInfo :: StorePath -> ByteString
 storePathToNarInfo StorePath{..} =
   encodeUtf8 $ encodeWith NixBase32 (coerce storePathHash) <> ".narinfo"
 
--- | Parse `StorePath` from `Bytes.Char8.ByteString`, checking
--- that store directory matches `expectedRoot`.
-parsePath :: StoreDir -> Bytes.Char8.ByteString -> Either String StorePath
-parsePath expectedRoot x =
+parsePathText :: StoreDir -> Text -> Either String StorePath
+parsePathText expectedRoot x =
   let
-    (rootDir, fname) = FilePath.splitFileName . Bytes.Char8.unpack $ x
-    (storeBasedHashPart, namePart) = Text.breakOn "-" $ toText fname
+    (rootDir, fname) = FilePath.splitFileName . T.unpack $ x
+    (storeBasedHashPart, namePart) = T.breakOn "-" $ toText fname
     storeHash = decodeWith NixBase32 storeBasedHashPart
-    name = makeStorePathName . Text.drop 1 $ namePart
+    name = makeStorePathName . T.drop 1 $ namePart
     --rootDir' = dropTrailingPathSeparator rootDir
     -- cannot use ^^ as it drops multiple slashes /a/b/// -> /a/b
 
     rootDir' = Unsafe.init rootDir
-    expectedRootS = Bytes.Char8.unpack (unStoreDir expectedRoot)
+    expectedRootS = BS8.unpack (unStoreDir expectedRoot)
   in if expectedRootS /= rootDir'
       then Left $ "Root store dir mismatch, expected" <> expectedRootS <> "got" <> rootDir'
       else StorePath <$> coerce storeHash <*> name
 
+-- | Parse `StorePath` from `Bytes.Char8.ByteString`, checking
+-- that store directory matches `expectedRoot`.
+parsePath :: StoreDir -> ByteString -> Either String StorePath
+parsePath expectedRoot x = parsePathText expectedRoot (T.decodeUtf8 x)
+
 pathParser :: StoreDir -> Parser StorePath
 pathParser expectedRoot = do
-  let expectedRootS = Bytes.Char8.unpack (unStoreDir expectedRoot)
-
-  _ <-
-    Parser.Text.Lazy.string (toText expectedRootS)
-      <?> "Store root mismatch" -- e.g. /nix/store
-
-  _ <- Parser.Text.Lazy.char '/'
-      <?> "Expecting path separator"
-
+  let expectedRootS = BS8.unpack (unStoreDir expectedRoot)
+  _ <- P.string (toText expectedRootS)
+    <?> "Store root mismatch" -- e.g. /nix/store
+  _ <- P.char '/'
+    <?> "Expecting path separator"
   digest <-
     decodeWith NixBase32
-    <$> Parser.Text.Lazy.takeWhile1 (`elem` Nix.Base32.digits32)
-      <?> "Invalid Base32 part"
-
-  _  <- Parser.Text.Lazy.char '-' <?> "Expecting dash (path name separator)"
-
-  c0 <-
-    Parser.Text.Lazy.satisfy (\c -> c /= '.' && validStorePathNameChar c)
-      <?> "Leading path name character is a dot or invalid character"
-
-  rest <-
-    Parser.Text.Lazy.takeWhile validStorePathNameChar
-      <?> "Path name contains invalid character"
-
-  let name = makeStorePathName $ Text.cons c0 rest
-
-  either
-    fail
-    pure
-    (StorePath <$> coerce digest <*> name)
+    <$> P.takeWhile1 (`elem` Nix.Base32.digits32)
+    <?> "Invalid Base32 part"
+  _  <- P.char '-' <?> "Expecting dash (path name separator)"
+  c0 <- P.satisfy (\c -> c /= '.' && validStorePathNameChar c)
+    <?> "Leading path name character is a dot or invalid character"
+  rest <- P.takeWhile validStorePathNameChar
+    <?> "Path name contains invalid character"
+  let name = makeStorePathName $ T.cons c0 rest
+  either fail pure (StorePath <$> coerce digest <*> name)

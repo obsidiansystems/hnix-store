@@ -5,10 +5,12 @@
 {-# language TypeFamilies               #-}
 
 module System.Nix.Nar.Parser
-  ( runParser
+  ( NarParser(..)
+  , runParser
   , parseNar
   , testParser
   , testParser'
+  , dbgState
   )
 where
 

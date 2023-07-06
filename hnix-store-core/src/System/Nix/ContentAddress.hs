@@ -1,7 +1,7 @@
 module System.Nix.ContentAddress where
 
 import Crypto.Hash
-import Data.Attoparsec.ByteString.Char8
+import Data.Attoparsec.Text
 import Data.Dependent.Sum
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder ( Builder )
@@ -38,9 +38,9 @@ data ContentAddress = ContentAddress
 
 -- | Marshall `ContentAddressableAddress` to `Text`
 -- in form suitable for remote protocol usage.
-buildContentAddress :: ContentAddress -> TL.Text
+buildContentAddress :: ContentAddress -> Text
 buildContentAddress =
-  TL.toLazyText . contentAddressBuilder
+  TL.toStrict . TL.toLazyText . contentAddressBuilder
 
 contentAddressBuilder :: ContentAddress -> Builder
 contentAddressBuilder (ContentAddress method digest) = case method of
@@ -61,9 +61,9 @@ digestBuilder (a :=> d) =
 
 -- | Parse `ContentAddressableAddress` from `ByteString`
 parseContentAddress
-  :: ByteString -> Either String ContentAddress
+  :: Text -> Either String ContentAddress
 parseContentAddress =
-  Data.Attoparsec.ByteString.Char8.parseOnly contentAddressParser
+  Data.Attoparsec.Text.parseOnly contentAddressParser
 
 -- | Parser for content addressable field
 contentAddressParser :: Parser ContentAddress
@@ -84,7 +84,7 @@ parseTypedDigest = mkNamedDigest <$> parseHashType <*> parseHash
 
 parseHashType :: Parser Text
 parseHashType =
-  decodeUtf8 <$> ("sha256" <|> "sha512" <|> "sha1" <|> "md5") <* (":" <|> "-")
+  ("sha256" <|> "sha512" <|> "sha1" <|> "md5") <* (":" <|> "-")
 
 parseHash :: Parser Text
-parseHash = decodeUtf8 <$> takeWhile1 (/= ':')
+parseHash = takeWhile1 (/= ':')

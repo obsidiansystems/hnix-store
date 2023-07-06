@@ -108,7 +108,7 @@ doReq = \case
 
   R.BuildPaths ps bm -> do
     void $ simpleOpArgs P.BuildPaths $ do
-      put (hashSet path) ps
+      put (set derivedPath) ps
       put enum bm
 
   R.BuildDerivation p drv buildMode -> do
@@ -183,7 +183,7 @@ doReq = \case
     sockGetPath
 
   R.QueryMissing ps -> do
-    runOpArgs P.QueryMissing $ put (hashSet path) ps
+    runOpArgs P.QueryMissing $ put (set derivedPath) ps
 
     willBuild      <- sockGetPaths
     willSubstitute <- sockGetPaths

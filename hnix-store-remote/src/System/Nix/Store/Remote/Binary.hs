@@ -43,12 +43,13 @@ module System.Nix.Store.Remote.Binary
   , derivation
   , buildResult
   , pathMetadata
+  , derivedPath
   -- -- *
   -- , storeRequest
   ) where
 
-import qualified Prelude
-import Prelude                 hiding (bool, map, maybe, put, get, putText, putBS)
+import Prelude qualified
+import Prelude hiding (bool, map, maybe, put, get, putText, putBS)
 
 import Crypto.Hash qualified as C
 import Data.Binary.Get qualified as B
@@ -61,14 +62,17 @@ import Data.Dependent.Sum
 import Data.HashSet qualified
 import Data.Map.Lazy qualified
 import Data.Map.Strict qualified
-import Data.Set qualified
+import Data.Set qualified as Set
 import Data.Some
+import Data.Text qualified as T
 import Data.Time
 import Data.Time.Clock.POSIX
 import Nix.Derivation hiding (path)
 import System.Nix.Build
 import System.Nix.ContentAddress
+import System.Nix.DerivedPath
 import System.Nix.Hash
+import System.Nix.Store.Remote.Protocol qualified as Proto
 import System.Nix.Store.Remote.Protocol hiding ( WorkerOp(..), protoVersion )
 import System.Nix.Store.Remote.TextConv
 import System.Nix.StorePath hiding ( storePathName )
@@ -76,6 +80,8 @@ import System.Nix.ValidPathInfo
 
 type Get r = ReaderT r B.Get
 type PutM r = ReaderT r B.PutM
+-- TODO: B.PutM doesn't allow handling failures, so we might want to transform it further
+-- e.g. We may want to fail in case of old protocol versions that are no longer supported.
 type Put r = PutM r ()
 
 data Serializer r a = Serializer
@@ -155,10 +161,35 @@ list a = Serializer
   }
 
 set :: Ord a => Serializer r a -> Serializer r (Set a)
-set = mapIsoSerializer Data.Set.fromList toList . list
+set = mapIsoSerializer Set.fromList toList . list
 
 hashSet :: (Eq a, Hashable a) => Serializer r a -> Serializer r (HashSet a)
 hashSet = mapIsoSerializer Data.HashSet.fromList toList . list
+
+{-
+data OutputsSpec = OutputsSpec_All | OutputsSpec_Names (Set StorePathName)
+  deriving (Eq, Ord, Show)
+
+data DerivedPath = DerivedPath_Opaque StorePath | DerivedPath_Built StorePath OutputsSpec
+  deriving (Eq, Ord, Show)
+-}
+
+derivedPath :: (HasProtoVersion r, HasStoreDir r) => Serializer r DerivedPath
+derivedPath = Serializer
+  { get = do
+      v <- asks Proto.protoVersion
+      when (v < ProtoVersion 1 30) (fail "derivedPath not yet implemented for old versions")
+      root <- asks storeDir
+      p <- get text
+      case parsePathWithOutputs root p of
+        Left err -> fail err
+        Right x -> return x
+  , put = \d -> do
+      v <- asks Proto.protoVersion
+      when (v < ProtoVersion 1 30) (error "derivedPath not yet implemented for old versions")
+      root <- asks storeDir
+      put text (derivedPathToText root d)
+  }
 
 tup :: Serializer r a -> Serializer r b -> Serializer r (a, b)
 tup a b = Serializer
@@ -285,7 +316,7 @@ path = Serializer
       x <- parsePath sd <$> get byteStringLen
       case x of
         Right v -> pure v
-        _ -> fail "invalid path"
+        Left e -> fail $ "path: invalid path: " <> e
   , put = \p -> do
       sd <- getStoreDir
       put byteStringLen $ storePathToRawFilePath sd $ p
@@ -303,7 +334,7 @@ maybePath = Serializer
           x <- parsePath sd <$> get byteStringLen
           case x of
             Right v -> pure $ Just v
-            _ -> fail "invalid path"
+            Left e -> fail $ "maybePath: invalid path: " <> e
   , put = \case
       Nothing -> put byteStringLen ""
       Just p -> do
@@ -385,7 +416,7 @@ pathMetadata = Serializer
 
       let
           -- XXX: signatures need pubkey from config
-          sigs = Data.Set.empty
+          sigs = Set.empty
       pure $ ValidPathInfo{..}
   , put = \x -> do
       put maybePath $ deriverPath x
@@ -413,55 +444,12 @@ storeRequest = Serializer
   }
 -}
 
-string :: ByteString -> Get r ByteString
-string x = lift $ do
-  s <- B.getByteString (BS.length x)
-  guard (s == x)
-  return s
-
-putBS :: ByteString -> Put r
-putBS s = lift (B.putByteString s)
-
-fileIngestionMethodS :: Serializer r FileIngestionMethod
-fileIngestionMethodS = Serializer
-  { get = (FileRecursive <$ string "r:") <|> pure Flat
-  , put = \case
-      FileRecursive -> putBS "r:"
-      Flat -> pure ()
-  }
-
-contentAddressMethodS :: Serializer r ContentAddressMethod
-contentAddressMethodS = Serializer
-  { get = (TextIngestionMethod <$ string "text:")
-      <|> (FileIngestionMethod <$> (string "fixed:" *> get fileIngestionMethodS))
-  , put = \case
-    TextIngestionMethod -> putBS "text:"
-    FileIngestionMethod s -> putBS "fixed:" >> put fileIngestionMethodS s
-  }
-
-hashAlgoS :: Serializer r (Some HashAlgo)
-hashAlgoS = Serializer
-  { get = Some HashAlgo_MD5 <$ string "md5"
-      <|> Some HashAlgo_SHA1 <$ string "sha1"
-      <|> Some HashAlgo_SHA256 <$ string "sha256"
-      <|> Some HashAlgo_SHA512 <$ string "sha512"
-  , put = \case
-      Some HashAlgo_MD5 -> putBS "md5"
-      Some HashAlgo_SHA1 -> putBS "sha1"
-      Some HashAlgo_SHA256 -> putBS "sha256"
-      Some HashAlgo_SHA512 -> putBS "sha512"
-  }
-
 contentAddressS :: Serializer r ContentAddress
 contentAddressS = Serializer
   { get = do
-      method <- get contentAddressMethodS
-      Some algo <- get hashAlgoS
-      d <- has @(C.HashAlgorithm) algo $
-        get (digest NixBase32)
-      return $ ContentAddress method (algo :=> d)
-  , put = \(ContentAddress method (algo :=> d)) -> do
-      put contentAddressMethodS method
-      has @(C.HashAlgorithm) algo $
-        put hashAlgoS (Some algo) >> put (digest NixBase32) d
+      r <- parseContentAddress <$> get text
+      case r of
+        Left s -> fail s
+        Right x -> return x
+  , put = \ca -> put text (buildContentAddress ca)
   }

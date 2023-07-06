@@ -18,9 +18,11 @@ where
 import Prelude hiding (bool, put, get)
 
 import Data.ByteString.Lazy qualified as BSL
+import Data.Set (Set)
 import Data.Some
 import Nix.Derivation (Derivation)
 import System.Nix.Build (BuildMode, BuildResult)
+import System.Nix.DerivedPath
 import System.Nix.Hash (HashAlgo)
 import System.Nix.Nar (NarSource)
 import System.Nix.StorePath (StorePath, StorePathName, StorePathSet, StorePathHashPart)
@@ -71,7 +73,7 @@ data StoreRequest :: Type -> Type where
   --
   -- If derivation output paths are already valid, do nothing.
   BuildPaths
-    :: StorePathSet
+    :: Set DerivedPath
     -> BuildMode
     -> StoreRequest ()
 
@@ -131,7 +133,7 @@ data StoreRequest :: Type -> Type where
     -> StoreRequest StorePath
 
   QueryMissing
-    :: StorePathSet
+    :: Set DerivedPath
     -> StoreRequest
       ( StorePathSet -- Paths that will be built
       , StorePathSet -- Paths that have substitutes
@@ -151,3 +153,4 @@ data StoreRequest :: Type -> Type where
     :: CheckFlag
     -> RepairFlag
     -> StoreRequest Bool
+
