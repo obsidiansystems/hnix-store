@@ -44,6 +44,7 @@ module System.Nix.Store.Remote.Binary
   , buildResult
   , pathMetadata
   , derivedPath
+  , derivedPathNew
   -- -- *
   -- , storeRequest
   ) where
@@ -166,19 +167,10 @@ set = mapIsoSerializer Set.fromList toList . list
 hashSet :: (Eq a, Hashable a) => Serializer r a -> Serializer r (HashSet a)
 hashSet = mapIsoSerializer Data.HashSet.fromList toList . list
 
-{-
-data OutputsSpec = OutputsSpec_All | OutputsSpec_Names (Set StorePathName)
-  deriving (Eq, Ord, Show)
-
-data DerivedPath = DerivedPath_Opaque StorePath | DerivedPath_Built StorePath OutputsSpec
-  deriving (Eq, Ord, Show)
--}
-
-derivedPath :: (HasProtoVersion r, HasStoreDir r) => Serializer r DerivedPath
-derivedPath = Serializer
+derivedPathNew :: (HasStoreDir r) => Serializer r DerivedPath
+derivedPathNew = Serializer
   { get = do
       v <- asks Proto.protoVersion
-      when (v < ProtoVersion 1 30) (fail "derivedPath not yet implemented for old versions")
       root <- asks storeDir
       p <- get text
       case parseDerivedPath root p of
@@ -186,9 +178,23 @@ derivedPath = Serializer
         Right x -> return x
   , put = \d -> do
       v <- asks Proto.protoVersion
-      when (v < ProtoVersion 1 30) (error "derivedPath not yet implemented for old versions")
       root <- asks storeDir
       put text (derivedPathToText root d)
+  }
+
+
+derivedPath :: (HasProtoVersion r, HasStoreDir r) => Serializer r DerivedPath
+derivedPath = Serializer
+  { get = do
+      v <- asks Proto.protoVersion
+      if v < ProtoVersion 1 30
+        then fail "derivedPath not yet implemented for old versions"
+        else get derivedPathNew
+  , put = \d -> do
+      v <- asks Proto.protoVersion
+      if v < ProtoVersion 1 30
+        then error "derivedPath not yet implemented for old versions"
+        else put derivedPathNew d
   }
 
 tup :: Serializer r a -> Serializer r b -> Serializer r (a, b)
