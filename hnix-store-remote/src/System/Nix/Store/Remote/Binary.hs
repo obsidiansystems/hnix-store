@@ -170,14 +170,12 @@ hashSet = mapIsoSerializer Data.HashSet.fromList toList . list
 derivedPathNew :: (HasStoreDir r) => Serializer r DerivedPath
 derivedPathNew = Serializer
   { get = do
-      v <- asks Proto.protoVersion
       root <- asks storeDir
       p <- get text
       case parseDerivedPath root p of
         Left err -> fail err
         Right x -> return x
   , put = \d -> do
-      v <- asks Proto.protoVersion
       root <- asks storeDir
       put text (derivedPathToText root d)
   }
