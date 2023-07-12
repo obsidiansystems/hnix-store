@@ -29,7 +29,7 @@ parseDerivedPath :: StoreDir -> Text -> Either String DerivedPath
 parseDerivedPath root p = case T.breakOn "!" p of
   (s,r) -> if T.null r
     then DerivedPath_Opaque <$> parsePathText root s
-    else DerivedPath_Built <$> parsePathText root s <*> parseOutputsSpec r
+    else DerivedPath_Built <$> parsePathText root s <*> parseOutputsSpec (T.drop (T.length "!") r)
 
 derivedPathToText :: StoreDir -> DerivedPath -> Text
 derivedPathToText root = \case
