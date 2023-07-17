@@ -15,7 +15,7 @@ import qualified Data.HashSet as HashSet
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T (putStrLn)
-import           Network.Socket
+import           Network.Socket hiding (recv)
 import           Network.Socket.ByteString
 
 import           System.Nix.StorePath ( StoreDir
