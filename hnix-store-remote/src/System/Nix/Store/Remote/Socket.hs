@@ -46,7 +46,10 @@ sockTryGet g = do
   sockGet8 :: m (Maybe BSC.ByteString)
   sockGet8 = do
     soc <- asks storeSocket
-    liftIO $ Just <$> recv soc 8
+    result <- liftIO $ recv soc 8
+    pure $ if BSC.length result == 0
+      then Nothing -- The other side has disconnected
+      else Just result
 
 sockGetS :: (MonadIO m, MonadReader r m, HasStoreSocket r) => RB.Serializer r a -> m a
 sockGetS s = sockGet (RB.get s)
