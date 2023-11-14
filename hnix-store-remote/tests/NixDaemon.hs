@@ -6,6 +6,7 @@ module NixDaemon where
 import Control.Concurrent (threadDelay)
 import Control.Exception (bracket)
 import Crypto.Hash (SHA256)
+import Data.Either qualified
 import Data.ByteString.Char8 qualified as BSC
 import Data.HashSet qualified as HS
 import Data.Map.Strict qualified as M
@@ -162,13 +163,13 @@ withPath action = do
 -- | dummy path, adds <tmp>/dummpy with "Hello World" contents
 dummy :: MonadStore StorePath
 dummy = do
-  let Right n = makeStorePathName "dummy"
-  doReq $ AddToStore n False (Some HashAlgo_SHA256) (dumpPath "dummy") False
+  let name = Data.Either.fromRight (error "impossible") $ makeStorePathName "dummy"
+  doReq $ AddToStore name False (Some HashAlgo_SHA256) (dumpPath "dummy") False
 
 invalidPath :: StorePath
 invalidPath =
-  let Right n = makeStorePathName "invalid"
-  in  StorePath (mkStorePathHashPart "invalid") n
+  let name = Data.Either.fromRight (error "impossible") $ makeStorePathName "invalid"
+  in  StorePath (mkStorePathHashPart "invalid") name
 
 withBuilder :: (StorePath -> MonadStore a) -> MonadStore a
 withBuilder action = do
@@ -274,8 +275,8 @@ makeSpecProtocol f = Hspec.around f $
     context "addToStore" $
       itRights "adds file to store" $ do
         fp <- liftIO $ writeSystemTempFile "addition" "lal"
-        let Right n = makeStorePathName "tmp-addition"
-        res <- doReq $ AddToStore n False (Some HashAlgo_SHA256) (dumpPath fp) False
+        let name = Data.Either.fromRight (error "impossible") $ makeStorePathName "tmp-addition"
+        res <- doReq $ AddToStore name False (Some HashAlgo_SHA256) (dumpPath fp) False
         liftIO $ print res
 
     context "with dummy" $ do

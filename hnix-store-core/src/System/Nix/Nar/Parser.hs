@@ -3,6 +3,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language ScopedTypeVariables        #-}
 {-# language TypeFamilies               #-}
+{-# language TypeOperators              #-}
 
 module System.Nix.Nar.Parser
   ( NarParser(..)
@@ -423,7 +424,7 @@ consume
 consume 0 = pure ""
 consume n = do
   state0   <- State.get
-  newBytes <- IO.liftIO $ Bytes.hGetSome (handle state0) (max 0 n)
+  newBytes <- IO.liftIO $ Bytes.hGet (handle state0) (max 0 n)
   when (Bytes.length newBytes < n) $
     Fail.fail $
     "consume: Not enough bytes in handle. Wanted "
