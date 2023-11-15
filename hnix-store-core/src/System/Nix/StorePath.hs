@@ -15,7 +15,6 @@ module System.Nix.StorePath
   , getStoreDir
   , StorePath(..)
   , StorePathName(..)
-  , StorePathSet
   , mkStorePathHashPart
   , StorePathHashPart(..)
   , NarHashMode(..)
@@ -86,9 +85,6 @@ newtype StorePathHashPart = StorePathHashPart ByteString
 
 mkStorePathHashPart :: ByteString -> StorePathHashPart
 mkStorePathHashPart = coerce . mkStorePathHash @SHA256
-
--- | A set of 'StorePath's.
-type StorePathSet = HashSet StorePath
 
 -- | Schemes for hashing a Nix archive.
 --

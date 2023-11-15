@@ -18,6 +18,7 @@ where
 import Prelude hiding (bool, put, get)
 
 import Data.ByteString.Lazy qualified as BSL
+import Data.HashSet (HashSet)
 import Data.Set (Set)
 import Data.Some
 import Nix.Derivation (Derivation)
@@ -25,7 +26,7 @@ import System.Nix.Build (BuildMode, BuildResult)
 import System.Nix.DerivedPath
 import System.Nix.Hash (HashAlgo)
 import System.Nix.Nar (NarSource)
-import System.Nix.StorePath (StorePath, StorePathName, StorePathSet, StorePathHashPart)
+import System.Nix.StorePath (StorePath, StorePathName, StorePathHashPart)
 import System.Nix.ValidPathInfo (ValidPathInfo)
 
 type RepairFlag = Bool
@@ -49,7 +50,7 @@ data StoreRequest :: Type -> Type where
   AddTextToStore
     :: Text         -- ^ Name of the text
     -> Text         -- ^ Actual text to add
-    -> StorePathSet -- ^ Set of `StorePath`s that the added text references
+    -> HashSet StorePath -- ^ Set of `StorePath`s that the added text references
     -> RepairFlag   -- ^ Repair flag, must be `False` in case of remote backend
     -> StoreRequest StorePath
 
@@ -97,16 +98,16 @@ data StoreRequest :: Type -> Type where
 
   -- | Query valid paths from set, optionally try to use substitutes.
   QueryValidPaths
-    :: StorePathSet -- ^ Set of `StorePath`s to query
+    :: HashSet StorePath -- ^ Set of `StorePath`s to query
     -> SubstituteFlag -- ^ Try substituting missing paths when `True`
-    -> StoreRequest StorePathSet
+    -> StoreRequest (HashSet StorePath)
 
   QueryAllValidPaths
-    :: StoreRequest StorePathSet
+    :: StoreRequest (HashSet StorePath)
 
   QuerySubstitutablePaths
-    :: StorePathSet
-    -> StoreRequest StorePathSet
+    :: HashSet StorePath
+    -> StoreRequest (HashSet StorePath)
 
   QueryPathInfo
     :: StorePath
@@ -114,15 +115,15 @@ data StoreRequest :: Type -> Type where
 
   QueryReferrers
     :: StorePath
-    -> StoreRequest StorePathSet
+    -> StoreRequest (HashSet StorePath)
 
   QueryValidDerivers
     :: StorePath
-    -> StoreRequest StorePathSet
+    -> StoreRequest (HashSet StorePath)
 
   QueryDerivationOutputs
     :: StorePath
-    -> StoreRequest StorePathSet
+    -> StoreRequest (HashSet StorePath)
 
   QueryDerivationOutputNames
     :: StorePath
@@ -135,9 +136,9 @@ data StoreRequest :: Type -> Type where
   QueryMissing
     :: Set DerivedPath
     -> StoreRequest
-      ( StorePathSet -- Paths that will be built
-      , StorePathSet -- Paths that have substitutes
-      , StorePathSet -- Unknown paths
+      ( HashSet StorePath -- Paths that will be built
+      , HashSet StorePath -- Paths that have substitutes
+      , HashSet StorePath -- Unknown paths
       , Integer -- Download size
       , Integer -- Nar size?
       )

@@ -42,7 +42,7 @@ makeStorePath sDir ty h nm = StorePath (coerce storeHash) nm
         ]
 
 makeTextPath
-  :: StoreDir -> StorePathName -> Digest SHA256 -> StorePathSet -> StorePath
+  :: StoreDir -> StorePathName -> Digest SHA256 -> HashSet StorePath -> StorePath
 makeTextPath sDir nm h refs = makeStorePath sDir ty h nm
  where
   ty =
@@ -70,7 +70,7 @@ makeFixedOutputPath sDir recursive h =
       <> ":"
 
 computeStorePathForText
-  :: StoreDir -> StorePathName -> ByteString -> (StorePathSet -> StorePath)
+  :: StoreDir -> StorePathName -> ByteString -> (HashSet StorePath -> StorePath)
 computeStorePathForText sDir nm = makeTextPath sDir nm . hash
 
 computeStorePathForPath

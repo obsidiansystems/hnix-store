@@ -20,6 +20,7 @@ import           Prelude                       hiding ( bool, put, get )
 import Control.Monad.Catch
 
 import qualified Data.Binary.Put as B
+import           Data.HashSet (HashSet)
 import qualified Data.ByteString
 import           Data.Some
 
@@ -29,7 +30,6 @@ import           Network.Socket.ByteString      ( sendAll
 import           System.Nix.Hash                ( HashAlgo(..)
                                                 )
 import           System.Nix.StorePath           ( StorePath
-                                                , StorePathSet
                                                 , StorePathName(..)
                                                 )
 import           System.Nix.Store.Remote.Binary as RB
@@ -208,7 +208,7 @@ doReq = \case
 sockGetPath :: MonadStore StorePath
 sockGetPath = sockGetS path
 
-sockGetPaths :: MonadStore StorePathSet
+sockGetPaths :: MonadStore (HashSet StorePath)
 sockGetPaths = do
   sockGetS $ hashSet path
 

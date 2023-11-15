@@ -4,10 +4,11 @@ Description : Metadata about Nix store paths.
 module System.Nix.ValidPathInfo where
 
 import Crypto.Hash qualified as C
+import Data.HashSet (HashSet)
 import Data.Time (UTCTime)
 import System.Nix.ContentAddress
 import System.Nix.Signature (NarSignature)
-import System.Nix.StorePath (StorePath, StorePathSet)
+import System.Nix.StorePath (StorePath)
 
 -- | Metadata about a 'StorePath'
 data ValidPathInfo = ValidPathInfo
@@ -18,7 +19,7 @@ data ValidPathInfo = ValidPathInfo
     -- | The hash of the nar serialization of the path.
     narHash :: !(C.Digest C.SHA256)
   , -- | The paths that this path directly references
-    references :: !StorePathSet
+    references :: !(HashSet StorePath)
   , -- | When was this path registered valid in the store?
     registrationTime :: !UTCTime
   , -- | The size of the nar serialization of the path, in bytes.
